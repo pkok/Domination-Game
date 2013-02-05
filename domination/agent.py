@@ -101,6 +101,20 @@ class Agent(object):
         # First agent clears the screen
         if self.id == 0:
             surface.fill((0,0,0,0))
+
+        fov_rect = pygame.Rect(self.observation.loc[0] - (self.settings.max_see),
+                               self.observation.loc[1] - (self.settings.max_see),
+                               2 * self.settings.max_see,
+                               2 * self.settings.max_see)
+
+        pygame.draw.rect(surface,
+                         (0,0,255),
+                         fov_rect,
+                         1)
+        pygame.draw.circle(surface,
+                           (255,0,0,90),
+                           self.observation.loc,
+                           self.settings.max_range) 
         # Selected agents draw their info
         if self.selected:
             if self.goal is not None:
