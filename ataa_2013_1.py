@@ -33,5 +33,5 @@ class Tournament1(run.Scenario):
                               max_score=100)
 
 
-# Tournament1.one_on_one(red="domination/agent.py", blue="domination/agent.py", output_folder='_tmp')
+# Tournament1.one_on_one(red="my_agent.py", blue="domination/agent.py", output_folder='_tmp')
 Tournament1.test(red="my_agent.py", blue="domination/agent.py")
