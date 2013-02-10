@@ -1,3 +1,4 @@
+from collections import defaultdict, namedtuple
 
 class Agent(object):
     
@@ -16,6 +17,7 @@ class Agent(object):
         self.settings = settings
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
+        self.joint_observation = JointObservation(settings)
         
         # Read the binary blob, we're not using it though
         if blob is not None:
@@ -36,6 +38,7 @@ class Agent(object):
             to determine your action. Note that the observation object
             is modified in place.
         """
+        self.joint_observation.update(observation)
         self.observation = observation
         self.selected = observation.selected
         
@@ -180,3 +183,94 @@ class Agent(object):
         """
         pass
         
+# Container for data in the JointObservation.
+AgentData = namedtuple("AgentData", ["x", "y", "angle", 
+                                     "ammo", "collided", "respawn_in", "hit"])
+
+class JointObservation(object):
+    """ A Singleton[1] object representing the joint observation of all our
+        agents. It should be updated during Agent.observe.
+
+        [1] http://en.wikipedia.org/wiki/Singleton_pattern
+    """
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        """ Doing some magic to make this a Singleton object.
+        """
+        if not cls._instance:
+            cls._instance = super(JointObservation, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
+
+    def __init__(self, settings):
+        # We might need it...
+        self.settings = settings
+
+        self.step = -1 # current timestep
+        # Per-agent data, stored in a namedtuple.
+        self.friends = {} # agent_id: (x, y, angle, ammo, collided, respawn_in, hit)
+
+        # Keeps track of the position of foe positions sorted per timestep
+        self.foes = {} # step: {(x, y, angle), ...}
+
+        # Lists all control point positions, which team is controlling it, and
+        # when it has been observed for the last time.
+        self.cps = {} # (x, y): (dominating_team, last_seen)
+        # Objects seen by the agents, together with the last time seen.
+        self.objects = defaultdict(lambda: [-1, -1]) # (x, y, type): last_seen, disappeared_since
+        # Walls that can be seen by the agents
+        # Patrick's NOTE: How is this interesting when agents have access to
+        #                 the map?
+        self.walls = defaultdict(set) # (x, y): {agent_id, ...}
+
+        # Current game score, and the difference with the score at the last
+        # timestep, as a discretized derivative
+        self.score = (0, 0)
+        self.diff_score = (0, 0)
+
+        # Amount of ammo carried per agent
+        self.ammo = {} # agent_id: ammo
+        # If the agent bumped into something during the last timestep
+        self.collided = {} # agent_id: collided
+        # How many time steps to go before an agent respawns, or -1 if already
+        # active.
+        self.respawn_in = {} # agent_id: respawn_in
+        # What did the agent hit by shooting? None also indicates no shooting
+        self.hit = {} # agent_id: None/TEAM_RED/TEAM_BLUE
+
+    def update(self, agent_id, observation):
+        """ Update the joint observation with a single agent's observation
+            information.
+        """
+        if self.step != observation.step:
+            self.step = observation.step
+            self.friends = {}
+            self.foes[self.step] = set()
+            self.collided = {}
+            self.hit = {}
+        self.friends[agent_id] = AgentData(observation.x, observation.y,
+                observation.angle, observation.ammo, observation.collided,
+                observation.respawn_in, observation.hit)
+        for foe in observation.foes:
+            self.foes[self.step].add(foe)
+        for cp in observation.cps:
+            self.cps[cp[:2]] = cp[-1], self.step
+        for obj in set(self.objects + observation.objects):
+            distance = sqrt((obj[0] - observation.loc[0]) ** 2 +
+                            (obj[1] - observation.loc[1]) ** 2)
+            if distance < settings.max_see:
+                if obj in observation.objects:
+                    self.objects[obj][0] = self.step
+                else:
+                    self.objects[obj][1] = self.step
+        for wall in set(self.walls + observation.walls):
+            if wall in observation.walls:
+                self.walls[wall].add(agent_id)
+            else:
+                self.walls[wall] -= {agent_id}
+        self.diff_score = (observation.score[0] - self.score[0],
+                           observation.score[1] - self.score[1])
+        self.ammo[agent_id] = observation.ammo
+        self.collided[agent_id] = observation.collided
+        self.respawn_in[agent_id] = observation.respawn_in
+        self.hit[agent_id] = observation.hit
