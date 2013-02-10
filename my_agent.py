@@ -244,10 +244,9 @@ class JointObservation(object):
         """
         if self.step != observation.step:
             self.step = observation.step
-            self.friends = {}
+            # Empty collections as neccesary 
             self.foes[self.step] = set()
-            self.collided = {}
-            self.hit = {}
+
         self.friends[agent_id] = AgentData(observation.x, observation.y,
                 observation.angle, observation.ammo, observation.collided,
                 observation.respawn_in, observation.hit)
