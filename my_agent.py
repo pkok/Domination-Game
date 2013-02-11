@@ -94,9 +94,15 @@ class Agent(object):
             obs.foes and 
             point_dist(obs.foes[0][0:2], obs.loc) < self.settings.max_range and
             not line_intersects_grid(obs.loc, obs.foes[0][0:2], self.grid, self.settings.tilesize)):
+            
             shoot = True
+            #Check for friendly fire
+            for friendly in obs.friends:
+                if line_intersects_circ(obs.loc, obs.foes[0][0:2], friendly, self.settings.tilesize):
+                    shoot = False
+            
 
-        # Compute path, angle and drive
+        # Compute path, angle and speed
         path = find_path(obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
         if path:
             dx = path[0][0] - obs.loc[0]
@@ -120,12 +126,13 @@ class Agent(object):
                 # Cap distance at 30 when not facing exactly in the right direction
                 if distance > 30:
                     distance = 30
-                # 
+                # Scale distance by how well the agent can move in the right direction
                 speed = distance*(1-((math.fabs(turn)-self.settings.max_turn)/(math.pi/2)))
             # If agent can reduce angle to zero, move the required distance
             else:
                 speed = distance
-
+        
+        # If no path was found, do nothing
         else:
             turn = 0
             speed = 0
@@ -264,7 +271,7 @@ class JointObservation(object):
             self.foes[self.step] = set()
             self.called_agents = set()
 
-        self.friends[agent_id] = AgentData(observation.x, observation.y,
+        self.friends[agent_id] = AgentData(observation.loc[0], observation.loc[1],
                 observation.angle, observation.ammo, observation.collided,
                 observation.respawn_in, observation.hit)
         for foe in observation.foes:
