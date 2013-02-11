@@ -38,7 +38,7 @@ class Agent(object):
             to determine your action. Note that the observation object
             is modified in place.
         """
-        self.joint_observation.update(observation)
+        #self.joint_observation.update(self.id, observation)
         self.observation = observation
         self.selected = observation.selected
         
@@ -107,12 +107,24 @@ class Agent(object):
             if turn > self.settings.max_turn or turn < -self.settings.max_turn:
                 shoot = False
             
-            # If target requires more turning than possible, stand still, else move required distance
-            slack = 1.1
-            if turn > self.settings.max_turn*slack or turn < -self.settings.max_turn*slack:
+            # Determine speed based on angle with planned path and planned distance
+            maxangle = (math.pi/2)+self.settings.max_turn
+            distance = (dx**2 + dy**2)**0.5
+            
+            #If agent cannot reduce angle to below 90 degrees by turning, set speed to zero
+            if turn >= maxangle or turn <= -maxangle:
                 speed = 0
+            
+            # If agent can at least face partly in the right direction, move some fraction of required distance
+            elif (turn > self.settings.max_turn and turn < maxangle) or (turn < -self.settings.max_turn and turn > -maxangle):
+                # Cap distance at 30 when not facing exactly in the right direction
+                if distance > 30:
+                    distance = 30
+                # 
+                speed = distance*(1-((math.fabs(turn)-self.settings.max_turn)/(math.pi/2)))
+            # If agent can reduce angle to zero, move the required distance
             else:
-                speed = (dx**2 + dy**2)**0.5
+                speed = distance
 
         else:
             turn = 0
@@ -221,6 +233,7 @@ class JointObservation(object):
         # Walls that can be seen by the agents
         # Patrick's NOTE: How is this interesting when agents have access to
         #                 the map?
+        # Stijn's NOTE: Probably used for line_intersect methods? No clue otherwise.
         self.walls = defaultdict(set) # (x, y): {agent_id, ...}
 
         # Current game score, and the difference with the score at the last
