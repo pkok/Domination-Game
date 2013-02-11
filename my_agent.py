@@ -2,7 +2,7 @@ from collections import defaultdict, namedtuple
 
 class Agent(object):
     
-    NAME = "default_agent"
+    NAME = "DOMINATORS!!!!!11!1!11!!1!one"
     
     def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None):
         """ Each agent is initialized at the beginning of each game.
