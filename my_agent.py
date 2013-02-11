@@ -18,7 +18,7 @@ class Agent(object):
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.joint_observation = JointObservation(settings)
-        
+
         # Read the binary blob, we're not using it though
         if blob is not None:
             print "Agent %s received binary blob of %s" % (
@@ -238,6 +238,9 @@ class JointObservation(object):
         # What did the agent hit by shooting? None also indicates no shooting
         self.hit = {} # agent_id: None/TEAM_RED/TEAM_BLUE
 
+        # Keep track of the agents who have passed their observation in this timestep
+        self.called_agents = set()
+
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
             information.
@@ -246,6 +249,7 @@ class JointObservation(object):
             self.step = observation.step
             # Empty collections as neccesary 
             self.foes[self.step] = set()
+            self.called_agents = set()
 
         self.friends[agent_id] = AgentData(observation.x, observation.y,
                 observation.angle, observation.ammo, observation.collided,
@@ -273,3 +277,13 @@ class JointObservation(object):
         self.collided[agent_id] = observation.collided
         self.respawn_in[agent_id] = observation.respawn_in
         self.hit[agent_id] = observation.hit
+
+        self.called_agents.add(agent_id)
+        if len(self.called_agents) == len(self.friends):
+            self.extract_features()
+        
+    def extract_features(self):
+        """ Creates an abstract representation of the observation, on which we will learn.
+        """
+        pass
+        # self.features = {}
