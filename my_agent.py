@@ -204,24 +204,32 @@ class Agent(object):
         """
         pass
         
+
+class Singleton(type):
+    """ Metaclass so only a single object from a class can be created.
+
+        For more information about the Singleton design pattern, please read
+        Wikipedia, or http://lmgtfy.com/?q=singleton+pattern .
+    """
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        else:
+            # Run __init__ every time the class is called
+            cls._instances[cls].__init__(*args, **kwargs)
+        return cls._instances[cls]
+
 # Container for data in the JointObservation.
 AgentData = namedtuple("AgentData", ["x", "y", "angle", 
                                      "ammo", "collided", "respawn_in", "hit"])
 
 class JointObservation(object):
-    """ A Singleton[1] object representing the joint observation of all our
+    """ A singleton object representing the joint observation of all our
         agents. It should be updated during Agent.observe.
-
-        [1] http://en.wikipedia.org/wiki/Singleton_pattern
     """
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        """ Doing some magic to make this a Singleton object.
-        """
-        if not cls._instance:
-            cls._instance = super(JointObservation, cls).__new__(cls, *args, **kwargs)
-        return cls._instance
+    __metaclass__ = Singleton
 
     def __init__(self, settings):
         # We might need it...
