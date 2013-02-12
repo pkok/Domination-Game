@@ -29,7 +29,7 @@ class Tournament1(run.Scenario):
                               spawn_time=10,
                               ammo_rate=9,
                               max_see=70,
-                              think_thime = 0.06,
+                              think_time = 0.06,
                               max_turn=math.pi/4,
                               max_score=100)
 
