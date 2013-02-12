@@ -19,7 +19,7 @@ class Agent(object):
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
         self.joint_observation = JointObservation(settings)
-        self.stateActionPairs = defaultdict(lambda: [None, None, 0])
+        self.state_strategy_pairs = defaultdict(lambda: [None, None, 0])
 
         # Read the binary blob, we're not using it though
         if blob is not None:
@@ -233,7 +233,32 @@ class JointObservation(object):
     __metaclass__ = Singleton
 
     def __init__(self, settings):
-        # We might need it...
+
+        # Regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
+        regions = [((0,0),     (125,95)),
+                   ((126,0),   (180,95)),
+                   ((181,0),   (350,95)),
+                   ((351,0),   (460,95)),
+                   ((0,96),    (55,175)),
+                   ((56,96),   (125,175)),
+                   ((126,96),  (180,175)),
+                   ((181,96),  (285,175)),
+                   ((286,96),  (350,175)),
+                   ((351,96),  (410,175)),
+                   ((411,96),  (460,175)),
+                   ((0,176),   (125,265)),
+                   ((126,176), (285,265)),
+                   ((286,176), (350,265)),
+                   ((351,176), (460,265))
+                  ]
+        # Possible compass directions for the agents
+        directions = ["N", "E", "S", "W"]
+        # self.directions = ["N", "NE" "E", "SE", "S", "SW", "W", "NW"]
+
+        # Death timer ranges (binned)
+        death_timer_ranges = ("0", "1-3", "4-6", "7-10") #(0,3,6,10,15)
+
+        # The game settings (not needed right now)
         self.settings = settings
 
         self.step = -1 # current timestep
@@ -333,35 +358,6 @@ class JointObservation(object):
 ##### State class ######################################################
 ########################################################################
 class State(object):
-    
-        ########################################################################
-        ##### Feature binning definitions ######################################
-        ########################################################################
-
-        # Regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
-        regions = [((0,0),     (125,95)),
-                   ((126,0),   (180,95)),
-                   ((181,0),   (350,95)),
-                   ((351,0),   (460,95)),
-                   ((0,96),    (55,175)),
-                   ((56,96),   (125,175)),
-                   ((126,96),  (180,175)),
-                   ((181,96),  (285,175)),
-                   ((286,96),  (350,175)),
-                   ((351,96),  (410,175)),
-                   ((411,96),  (460,175)),
-                   ((0,176),   (125,265)),
-                   ((126,176), (285,265)),
-                   ((286,176), (350,265)),
-                   ((351,176), (460,265))
-                  ]
-        # Possible compass directions for the agents
-        directions = ["N", "E", "S", "W"]
-        # self.directions = ["N", "NE" "E", "SE", "S", "SW", "W", "NW"]
-
-        # Death timer ranges (binned)
-        death_timer_ranges = ("0", "1-3", "4-6", "7-10") #(0,3,6,10,15)
-
 
     def __init__(self):
         """ Statespace of the agent
@@ -395,8 +391,9 @@ class State(object):
 ########################################################################
 ##### Strategy class ###################################################
 ########################################################################
-# class Strategy(object):
+class Strategy(object):
 
-#     strategies = ["Offensive", "Defensive", "Relentless"]
+    strategy_names = ["Offensive", "Defensive", "Relentless"]
 
-#     def __init__(self)
+    def __init__(self):
+        pass
