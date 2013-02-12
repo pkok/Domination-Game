@@ -39,7 +39,7 @@ class Agent(object):
             to determine your action. Note that the observation object
             is modified in place.
         """
-        self.joint_observation.update(self.id, observation)
+        #self.joint_observation.update(self.id, observation)
 
         self.observation = observation
         self.selected = observation.selected
@@ -96,9 +96,15 @@ class Agent(object):
             obs.foes and 
             point_dist(obs.foes[0][0:2], obs.loc) < self.settings.max_range and
             not line_intersects_grid(obs.loc, obs.foes[0][0:2], self.grid, self.settings.tilesize)):
+            
             shoot = True
+            #Check for friendly fire
+            for friendly in obs.friends:
+                if line_intersects_circ(obs.loc, obs.foes[0][0:2], friendly, self.settings.tilesize):
+                    shoot = False
+            
 
-        # Compute path, angle and drive
+        # Compute path, angle and speed
         path = find_path(obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
         if path:
             dx = path[0][0] - obs.loc[0]
@@ -109,13 +115,26 @@ class Agent(object):
             if turn > self.settings.max_turn or turn < -self.settings.max_turn:
                 shoot = False
             
-            # If target requires more turning than possible, stand still, else move required distance
-            slack = 1.1
-            if turn > self.settings.max_turn*slack or turn < -self.settings.max_turn*slack:
+            # Determine speed based on angle with planned path and planned distance
+            maxangle = (math.pi/2)+self.settings.max_turn
+            distance = (dx**2 + dy**2)**0.5
+            
+            #If agent cannot reduce angle to below 90 degrees by turning, set speed to zero
+            if turn >= maxangle or turn <= -maxangle:
                 speed = 0
+            
+            # If agent can at least face partly in the right direction, move some fraction of required distance
+            elif (turn > self.settings.max_turn and turn < maxangle) or (turn < -self.settings.max_turn and turn > -maxangle):
+                # Cap distance at 30 when not facing exactly in the right direction
+                if distance > 30:
+                    distance = 30
+                # Scale distance by how well the agent can move in the right direction
+                speed = distance*(1-((math.fabs(turn)-self.settings.max_turn)/(math.pi/2)))
+            # If agent can reduce angle to zero, move the required distance
             else:
-                speed = (dx**2 + dy**2)**0.5
-
+                speed = distance
+        
+        # If no path was found, do nothing
         else:
             turn = 0
             speed = 0
@@ -223,6 +242,7 @@ class JointObservation(object):
         # Walls that can be seen by the agents
         # Patrick's NOTE: How is this interesting when agents have access to
         #                 the map?
+        # Stijn's NOTE: Probably used for line_intersect methods? No clue otherwise.
         self.walls = defaultdict(set) # (x, y): {agent_id, ...}
 
         # Current game score, and the difference with the score at the last
@@ -253,9 +273,8 @@ class JointObservation(object):
             self.foes[self.step] = set()
             self.called_agents = set()
 
-        loc = observation.loc
-        self.friends[agent_id] = AgentData(loc[0], loc[1], observation.angle,
-                observation.ammo, observation.collided, 
+        self.friends[agent_id] = AgentData(observation.loc[0], observation.loc[1],
+                observation.angle, observation.ammo, observation.collided,
                 observation.respawn_in, observation.hit)
         for foe in observation.foes:
             self.foes[self.step].add(foe)
@@ -291,3 +310,45 @@ class JointObservation(object):
         """
         pass
         # self.features = {}
+        
+class Statespace(object):
+    
+    def __init__(self):
+        """ Statespace of the agent
+            Assumptions:
+            We can get the settings from the core file
+            We know all the positions beforehand so these do not have to be defined here
+        """
+        """ Agent location (region based - 16 regions for first map)
+            Agent orientation (4 (or 8?) possible values per agent)
+            Agent ammo possession (2 possible values per agent)
+            “Almost lost” ((score = behind && time is almost up && we do not control all CPs) OR
+            (score = almost at threshold losing value)) - (2 possible values)
+            CP’s assumed to be controlled (2 possible values per control point)
+            Death timers (4 possible values per agent. Values: alive, 1-3, 4-6, 7-10)
+        """
+        #regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
+        self.regions = [((0,0),     (125,95)),
+                        ((126,0),   (180,95)),
+                        ((181,0),   (350,95)),
+                        ((351,0),   (460,95)),
+                        ((0,96),    (55,175)),
+                        ((56,96),   (125,175)),
+                        ((126,96),  (180,175)),
+                        ((181,96),  (285,175)),
+                        ((286,96),  (350,175)),
+                        ((351,96),  (410,175)),
+                        ((411,96),  (460,175)),
+                        ((0,176),   (125,265)),
+                        ((126,176), (285,265)),
+                        ((286,176), (350,265)),
+                        ((351,176), (460,265))
+                       ]
+        self.locations = {"agent1":(),"agent2":(),"agent3":()}
+        self.orientation = 0.0;
+        self.hasAmmo = {"agent1":False,"agent2":False,"agent3":False}
+        self.finalStand = False
+        self.controlpoints = {"cp1":False, "cp2":False}
+        self.ammoObserved = {"ammo1":0, "ammo2":0}
+        self.ammoRespawning = {"ammo1":False, "ammo2":False}
+        self.timerRanges = (0,3,6,10,15)
