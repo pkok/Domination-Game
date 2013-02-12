@@ -2,7 +2,7 @@ from collections import defaultdict, namedtuple
 
 class Agent(object):
     
-    NAME = "DOMINATORS!!!!!11!1!11!!1!one"
+    NAME = 'DOMINATORSexclamationmark1exclamationmarkexclamationmark11one'
     
     def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None):
         """ Each agent is initialized at the beginning of each game.
@@ -322,9 +322,9 @@ class Statespace(object):
         """ Agent location (region based - 16 regions for first map)
             Agent orientation (4 (or 8?) possible values per agent)
             Agent ammo possession (2 possible values per agent)
-            “Almost lost” ((score = behind && time is almost up && we do not control all CPs) OR
+            "Almost lost" ((score = behind && time is almost up && we do not control all CPs) OR
             (score = almost at threshold losing value)) - (2 possible values)
-            CP’s assumed to be controlled (2 possible values per control point)
+            CP's assumed to be controlled (2 possible values per control point)
             Death timers (4 possible values per agent. Values: alive, 1-3, 4-6, 7-10)
         """
         #regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
