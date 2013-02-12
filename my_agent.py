@@ -60,7 +60,6 @@ class Agent(object):
     
     def set_goal(self, obs):
         """This function sets the goal for the agent.
-           Nobert, Thomas, Fernando: this is your turf!
         """
         # Check if agent reached goal.
         if self.goal is not None and point_dist(self.goal, obs.loc) < self.settings.tilesize:
@@ -81,8 +80,7 @@ class Agent(object):
             self.goal = obs.cps[random.randint(0,len(obs.cps)-1)][0:2]
     
     def get_action(self, obs):
-        """This function returns the action for the agent.
-           Patrick, Stijn: this is your turf!
+        """This function returns the action tuple for the agent.
         """
         # Compute path and angle to path
         path = find_path(obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
@@ -91,74 +89,122 @@ class Agent(object):
             dy = path[0][1] - obs.loc[1]
             path_angle = angle_fix(math.atan2(dy, dx) - obs.angle)
 
-        # Compute shoot and angle to enemies
-        shoot = False
-        if (obs.ammo > 0 and 
-            obs.foes and 
-            point_dist(obs.foes[0][0:2], obs.loc) < self.settings.max_range and
-            not line_intersects_grid(obs.loc, obs.foes[0][0:2], self.grid, self.settings.tilesize)):
+            # Compute shoot and turn
+            shoot, turn = self.compute_shoot(obs, path_angle)
             
-            # Calculate angle and distance to enemy center
-            dxf = obs.foes[0][0] - obs.loc[0]
-            dyf = obs.foes[0][1] - obs.loc[1]
-            cen_angle = angle_fix(math.atan2(dyf, dxf) - obs.angle)
-            cen_dist = (dxf**2 + dyf**2)**0.5
-            
-            # Calculate angle between enemy center and edge
-            in_angle = math.asin(6.0 / cen_dist)
-            
-            # Calculate minimum angle the agent should turn to hit enemy
-            if cen_angle > 0:
-                if cen_angle >= in_angle:
-                    req_turn = cen_angle - in_angle
-                else:
-                    req_turn = 0 #ACTUALLY, CALCULATE ANGLE TO GOAL AND TURN AS FAR AS POSSIBLE
-            else:
-                if cen_angle <= -in_angle:
-                    req_turn = cen_angle + in_angle
-                else:
-                    req_turn = 0 #ACTUALLY, CALCULATE ANGLE TO GOAL AND TURN AS FAR AS POSSIBLE
-                            
-            if math.fabs(req_turn) <= self.settings.max_turn:
-                shoot = True
-                turn = req_turn
-            
-            #Check for friendly fire
-            for friendly in obs.friends:
-                if line_intersects_circ(obs.loc, obs.foes[0][0:2], friendly, 6):
-                    shoot = False
-        
-        # Compute speed
-        if path:
-            if not shoot:
-                turn = path_angle
-            
-            # Determine speed based on angle with planned path and planned distance
-            maxangle = (math.pi/2)+self.settings.max_turn
-            distance = (dx**2 + dy**2)**0.5
-            
-            #If agent cannot reduce angle to below 90 degrees by turning, set speed to zero
-            if turn >= maxangle or turn <= -maxangle:
-                speed = 0
-            
-            # If agent can at least face partly in the right direction, move some fraction of required distance
-            elif ((turn > self.settings.max_turn and turn < maxangle) or 
-                (turn < -self.settings.max_turn and turn > -maxangle)):
-                # Cap distance at 30 when not facing exactly in the right direction
-                if distance > 30:
-                    distance = 30
-                # Scale distance by how well the agent can move in the right direction
-                speed = distance*(1-((math.fabs(turn)-self.settings.max_turn)/(math.pi/2)))
-            # If agent can reduce angle to zero, move the required distance
-            else:
-                speed = distance
-        
+            # Compute speed
+            speed = self.compute_speed(turn, dx, dy)
+
         # If no path was found, do nothing
         else:
             turn = 0
             speed = 0
+            shoot = False
         
         return (turn,speed,shoot)
+    
+    def compute_shoot(self, obs, path_angle):
+        """This function returns shoot and turn actions for the agent
+        """
+        shoot = False
+        turn = path_angle
+        
+        # Check for ammo and nearby enemies
+        if obs.ammo > 0 and obs.foes:
+            
+            # Calculate which foes are roughly within a possible angle or distance to shoot
+            shootable = []
+            for foe in obs.foes:
+                # Calculate angle and distance to center
+                dxf = foe[0] - obs.loc[0]
+                dyf = foe[1] - obs.loc[1]
+                cen_angle = angle_fix(math.atan2(dyf, dxf) - obs.angle)
+                cen_dist = (dxf**2 + dyf**2)**0.5
+                
+                if (math.fabs(cen_angle) <= (self.settings.max_turn + pi/6) and 
+                    cen_dist <= (self.settings.max_range + 6)):
+                    shootable.append((foe[0],foe[1],cen_angle,cen_dist))
+            
+            # Check for obstruction (currently checks only center of foe)
+            shootable2 = copy.deepcopy(shootable)
+            for foe in shootable:
+                # Check for walls
+                if line_intersects_grid(obs.loc, foe[0:2], self.grid, self.settings.tilesize):
+                    shootable2.remove(foe)
+                #Check for friendly fire
+                for friendly in obs.friends:
+                    if line_intersects_circ(obs.loc, foe[0:2], friendly, 6):
+                        shootable2.remove(foe)
+            
+            # Calculate exact min and max angles between which each foe can be shot
+            shootable3 = []
+            for foe in shootable2:
+                
+                # Calculate angle between enemy center and edge
+                in_angle = math.asin(6.0 / foe[3])*0.5
+                
+                # Calculate angles between foe can be hit
+                cen_angle = foe[2]
+                if cen_angle > 0:
+                    min_angle = cen_angle - in_angle
+                    max_angle = cen_angle + in_angle
+                else:
+                    min_angle = cen_angle + in_angle
+                    max_angle = cen_angle - in_angle
+                
+                # Check distance for these angles (NOT IMPLEMENTED YET)
+                if (self.settings.max_turn > math.fabs(min_angle) and 
+                    foe[3] < self.settings.max_range):
+                    shootable3.append((foe[0],foe[1],foe[2],foe[3],min_angle,max_angle))
+            
+            # Pick foe that can be shot on an angle that least distracts from agent's goal
+            for foe in shootable3:
+                cen_angle = foe[3]
+                min_angle = foe[4]
+                max_angle = foe[5]
+                
+                if (cen_angle > 0 and self.settings.max_turn >= min_angle):
+                    shoot = True
+                    if path_angle > max_angle:
+                        turn = max_angle
+                    elif path_angle < min_angle:
+                        turn = min_angle
+                    else:
+                        return (shoot,turn)
+                elif (cen_angle <= 0 and -self.settings.max_turn <= min_angle):
+                    shoot = True
+                    if path_angle < max_angle:
+                        turn = max_angle
+                    elif path_angle > min_angle:
+                        turn = min_angle
+                    else:
+                        return (shoot,turn)
+
+        return (shoot, turn)
+    
+    def compute_speed(self, turn, dx, dy):
+        # Compute speed based on angle with planned path and planned distance
+        maxangle = (math.pi/2)+self.settings.max_turn
+        distance = (dx**2 + dy**2)**0.5
+        
+        #If agent cannot reduce angle to below 90 degrees by turning, set speed to zero
+        if turn >= maxangle or turn <= -maxangle:
+            speed = 0
+        
+        # If agent can at least face partly in the right direction, move some fraction of required distance
+        elif ((turn > self.settings.max_turn and turn < maxangle) or 
+            (turn < -self.settings.max_turn and turn > -maxangle)):
+            # Cap distance at 30 when not facing exactly in the right direction
+            if distance > 30:
+                distance = 30
+            # Scale distance by how well the agent can move in the right direction
+            speed = distance*(1-((math.fabs(turn)-self.settings.max_turn)/(math.pi/2)))
+        
+        # If agent can reduce angle to zero, move the required distance
+        else:
+            speed = distance
+        
+        return speed
     
     def debug(self, surface):
         """ Allows the agents to draw on the game UI,
