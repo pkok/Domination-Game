@@ -368,8 +368,8 @@ class State(object):
         """ -Agent location (region based - 16 regions for first map)
             -Agent orientation (8 possible values per agent)
             -Agent ammo possession (2 possible values per agent)
-            -“Almost lost” ((score = behind && time is almost up && we do not control all CPs) OR (score = almost at threshold losing value)) - (2 possible values)
-            -CP’s assumed to be controlled (2 possible values per control point)
+            -"Almost lost" ((score = behind && time is almost up && we do not control all CPs) OR (score = almost at threshold losing value)) - (2 possible values)
+            -CP's assumed to be controlled (2 possible values per control point)
             -Death timers (4 possible values per agent. Values: alive, 1-3, 4-6, 7-10)
         """
 
@@ -396,11 +396,11 @@ class Strategy(object):
     # Our strategies define the % of bots that go for certain goals.
 
     # strategies =  "Name"      :  % offense  , % defensive , % get_ammo  
-    strategies   = {"Offensive" : (float(2)/3 , 0           , float(1)/3),
-                    "Defensive" : (0          , float(2)/3) , float(1)/3),
-                    "Ammo_def"  : (0          , float(1)/3) , float(2)/3),
-                    "Ammo_off"  : (0          , float(1)/3) , float(2)/3),
-                    "Relentless": (1          , 0           , 0         )
+    strategies   = {"Offensive" : (2./3., 0    , 1./3.),
+                    "Defensive" : (0.   , 2./3., 1./3.),
+                    "Ammo_def"  : (0.   , 2./3., 2./3.),
+                    "Ammo_off"  : (0.   , 2./3., 2./3.),
+                    "Relentless": (1.   , 0    , 0)
                    }
     
     def __init__(self):
