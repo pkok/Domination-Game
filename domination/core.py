@@ -6,7 +6,7 @@ Refer to the readme for usage instructions.
 
 """
 __author__ = "Thomas van den Berg and Tim Doolan"
-MAJOR,MINOR,PATCH = 1,5,3
+MAJOR,MINOR,PATCH = 1,6,0
 __version__ = '%d.%d.%d'%(MAJOR,MINOR,PATCH)
 
 ### IMPORTS ###
@@ -66,7 +66,7 @@ AGENT_GLOBALS = globals().copy()
 
 class Settings(object):
     def __init__(self, max_steps=600,
-                       max_score=1000,
+                       max_score=400,
                        max_turn=pi/3,
                        max_speed=40,
                        max_range=60,
@@ -416,7 +416,7 @@ class Game(object):
                 for i,s in enumerate(spawns):
                     kwargs = copy.deepcopy(brain_kwargs)
                     kwargs.update(init_kwargs)
-                    brain = self._agent_call(brainclass, args=[i, team], kwargs=kwargs, default=AgentStub())
+                    brain = self._agent_call(brainclass, args=[i, team], kwargs=kwargs, team=team, default=AgentStub())
                     t = Tank(s.x+2, s.y+2, s.angle, i, team=team, brain=brain, spawn=s, record=self.record)
                     self.tanks.append(t)
                     self._add_object(t)

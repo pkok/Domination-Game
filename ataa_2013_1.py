@@ -25,9 +25,9 @@ w w w w w w w w w w w w w w w w w w w w w w w w w w w w w
 class Tournament1(run.Scenario):
     GENERATOR = None
     FIELD     = core.Field.from_string(FIELD)
-    SETTINGS  = core.Settings(ammo_amount=1,
-                              spawn_time=10,
-                              ammo_rate=9,
+    SETTINGS  = core.Settings(ammo_amount=1, 
+                              spawn_time=10, 
+                              ammo_rate=9, 
                               max_see=70,
                               think_time = 0.06,
                               max_turn=math.pi/4,
