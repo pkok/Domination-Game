@@ -100,7 +100,7 @@ class Agent(object):
             shoot = True
             #Check for friendly fire
             for friendly in obs.friends:
-                if line_intersects_circ(obs.loc, obs.foes[0][0:2], friendly, self.settings.tilesize):
+                if line_intersects_circ(obs.loc, obs.foes[0][0:2], friendly, 6):
                     shoot = False
             
 
