@@ -80,18 +80,18 @@ class Agent(object):
         if self.goal is None:
             self.goal = obs.cps[random.randint(0,len(obs.cps)-1)][0:2]
     
-        # Shoot enemies
-        if (obs.ammo > 0 and 
-            obs.foes and 
-            point_dist(obs.foes[0][0:2], obs.loc) < self.settings.max_range and
-            not line_intersects_grid(obs.loc, obs.foes[0][0:2], self.grid, self.settings.tilesize)):
-            self.goal = obs.foes[0][0:2]
-    
     def get_action(self, obs):
         """This function returns the action for the agent.
            Patrick, Stijn: this is your turf!
         """
-        # Try to shoot enemies if they are within range and angle
+        # Compute path and angle to path
+        path = find_path(obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
+        if path:
+            dx = path[0][0] - obs.loc[0]
+            dy = path[0][1] - obs.loc[1]
+            path_angle = angle_fix(math.atan2(dy, dx) - obs.angle)
+
+        # Compute shoot and angle to enemies
         shoot = False
         if (obs.ammo > 0 and 
             obs.foes and 
@@ -128,13 +128,10 @@ class Agent(object):
                 if line_intersects_circ(obs.loc, obs.foes[0][0:2], friendly, 6):
                     shoot = False
         
-        # Compute path, angle and speed
-        path = find_path(obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
+        # Compute speed
         if path:
-            dx = path[0][0] - obs.loc[0]
-            dy = path[0][1] - obs.loc[1]
             if not shoot:
-                turn = angle_fix(math.atan2(dy, dx) - obs.angle)
+                turn = path_angle
             
             # Determine speed based on angle with planned path and planned distance
             maxangle = (math.pi/2)+self.settings.max_turn
@@ -155,6 +152,7 @@ class Agent(object):
             # If agent can reduce angle to zero, move the required distance
             else:
                 speed = distance
+        
         # If no path was found, do nothing
         else:
             turn = 0
