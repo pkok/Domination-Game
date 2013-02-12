@@ -393,7 +393,15 @@ class State(object):
 ########################################################################
 class Strategy(object):
 
-    strategy_names = ["Offensive", "Defensive", "Relentless"]
+    # Our strategies define the % of bots that go for certain goals.
 
+    # strategies =  "Name"      :  % offense  , % defensive , % get_ammo  
+    strategies   = {"Offensive" : (float(2)/3 , 0           , float(1)/3),
+                    "Defensive" : (0          , float(2)/3) , float(1)/3),
+                    "Ammo_def"  : (0          , float(1)/3) , float(2)/3),
+                    "Ammo_off"  : (0          , float(1)/3) , float(2)/3),
+                    "Relentless": (1          , 0           , 0         )
+                   }
+    
     def __init__(self):
         pass
