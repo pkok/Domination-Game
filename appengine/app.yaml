@@ -1,6 +1,7 @@
 application: aamasgame
-version: 1-3-0-alpha
-runtime: python
+version: 1-5-3-beta
+runtime: python27
+threadsafe: false
 api_version: 1
 
 handlers:
@@ -23,3 +24,7 @@ handlers:
 
 builtins:
 - deferred: on
+
+libraries:
+- name: django
+  version: 1.2

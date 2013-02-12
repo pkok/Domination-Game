@@ -6,6 +6,7 @@ import logging
 import urllib
 import random
 import re
+import platform
 from datetime import datetime, time, date, timedelta
 
 # AppEngine imports
@@ -112,7 +113,9 @@ def connect_account(request):
     
 def group(request, groupslug):
     """ A group's home page, basically the front page """
-    return respond(request, 'group.html', {'group':request.group})
+    return respond(request, 'group.html', {'group':request.group, 
+                                           'dgversion':core.__version__, 
+                                           'pyversion':platform.python_version()})
     
 def team(request, groupslug, team_id):
     team = models.Team.get_by_id(int(team_id), parent=request.group)
@@ -184,7 +187,7 @@ def dashboard(request, groupslug):
     if request.method == 'POST':
 
         if 'newbrain' in request.POST:
-            source = str(request.POST['newbrain']).strip()
+            source = str(request.POST['newbrain']).strip() + '\n'
             source = re.sub(r'(\r\n|\r|\n)', '\n', source)
             if request.user.current_team.recent_upload_count() >= request.group.max_uploads:
                 messages.append(("error", "Max uploads exceeded."))

@@ -6,7 +6,7 @@ Refer to the readme for usage instructions.
 
 """
 __author__ = "Thomas van den Berg and Tim Doolan"
-MAJOR,MINOR,PATCH = 1,5,1
+MAJOR,MINOR,PATCH = 1,5,3
 __version__ = '%d.%d.%d'%(MAJOR,MINOR,PATCH)
 
 ### IMPORTS ###
@@ -87,7 +87,7 @@ class Settings(object):
             :param max_speed:     Number of game units each tank can drive in its turn
             :param max_turn:      The maximum angle that a tank can rotate in a turn
             :param max_range:     The shooting range of tanks in game units
-            :param max_see:       How far tanks can see (Manhattan distance)
+            :param max_see:       How far tanks can see (vision is a square with sides that are 2x this value)
             :param field_known:   Whether the agents have knowledge of the field at game start
             :param ammo_rate:     How long it takes for ammo to reappear
             :param ammo_amount:   How many bullets there are in each ammo pack
@@ -170,7 +170,7 @@ class GameLog(object):
 class Team(object):
     """ Holds info about a team.
     """
-    FIND_NAME   = r'^[ \t]*NAME[ \t]*=[ \t]*[\'\"]([a-zA-Z0-9\-\_ ]+)[\'\"]'
+    FIND_NAME   = r'^[ \t]*NAME[ \t]*=[ \t]*[\'\"]([a-zA-Z0-9\-\_ ]{3,20})[\'\"]'
     NAME_UNSAFE = r'[^a-zA-Z0-9\_]+'
     
     def __init__(self, brain=None, init_kwargs={}, name=None):
@@ -236,7 +236,7 @@ class AgentStub(object):
         
     def action(self): return (0,0,False)
     
-    def finalize(self): pass
+    def finalize(self, interrupted=False): pass
         
     def debug(self, surface): pass
             
@@ -810,7 +810,7 @@ class Game(object):
     def _raycast(self, p0, p1, exclude=None):
         """ Shoots a ray from p0 to p1 and determines
             which objects are hit and at what time
-            in the parametric line equation p0 + t*(p1-p0)
+            in the parametric line equation p0 + t * (p1 - p0)
         """
         p0x, p0y = p0
         p1x, p1y = p1
@@ -1442,7 +1442,7 @@ class Tank(GameObject):
         self.shoots = False
         if self.respawn_in == -1:
             max_turn = self.game.settings.max_turn
-            speed = min(self.game.settings.max_speed, speed)
+            speed = max(-self.game.settings.max_speed, min(self.game.settings.max_speed, speed))
             turn = max(-max_turn, min(max_turn, angle_fix(turn)))
             self.angle += turn
             self.x += math.cos(self.angle)*speed
