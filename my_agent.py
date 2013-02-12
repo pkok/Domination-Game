@@ -4,7 +4,7 @@ class Agent(object):
     
     NAME = 'DOMINATORSexclamationmark1exclamationmarkexclamationmark11one'
     
-    def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None, match_info=None, *args, **kwargs):
+    def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None, matchinfo=None, *args, **kwargs):
         """ Each agent is initialized at the beginning of each game.
             The first agent (id==0) can use this to set up global variables.
             Note that the properties pertaining to the game field might not be
@@ -40,11 +40,11 @@ class Agent(object):
             to determine your action. Note that the observation object
             is modified in place.
         """
-        #self.joint_observation.update(self.id, observation)
+        self.joint_observation.update(self.id, observation)
 
         self.observation = observation
         self.selected = observation.selected
-        
+
         if observation.selected:
             print observation
                     
