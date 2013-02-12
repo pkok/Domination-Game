@@ -17,6 +17,7 @@ class Agent(object):
         self.settings = settings
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
+        self.selected = False
         self.joint_observation = JointObservation(settings)
 
         # Read the binary blob, we're not using it though
@@ -38,7 +39,8 @@ class Agent(object):
             to determine your action. Note that the observation object
             is modified in place.
         """
-        self.joint_observation.update(observation)
+        self.joint_observation.update(self.id, observation)
+
         self.observation = observation
         self.selected = observation.selected
         
@@ -251,22 +253,24 @@ class JointObservation(object):
             self.foes[self.step] = set()
             self.called_agents = set()
 
-        self.friends[agent_id] = AgentData(observation.x, observation.y,
-                observation.angle, observation.ammo, observation.collided,
+        loc = observation.loc
+        self.friends[agent_id] = AgentData(loc[0], loc[1], observation.angle,
+                observation.ammo, observation.collided, 
                 observation.respawn_in, observation.hit)
         for foe in observation.foes:
             self.foes[self.step].add(foe)
         for cp in observation.cps:
             self.cps[cp[:2]] = cp[-1], self.step
-        for obj in set(self.objects + observation.objects):
-            distance = sqrt((obj[0] - observation.loc[0]) ** 2 +
-                            (obj[1] - observation.loc[1]) ** 2)
-            if distance < settings.max_see:
+        for obj in set(self.objects.keys() + observation.objects):
+            distance = ((obj[0] - observation.loc[0]) ** 2 +
+                       (obj[1] - observation.loc[1]) ** 2) ** 0.5
+            if distance < self.settings.max_see:
                 if obj in observation.objects:
                     self.objects[obj][0] = self.step
                 else:
                     self.objects[obj][1] = self.step
-        for wall in set(self.walls + observation.walls):
+        walls_as_tuples = [tuple(w) for w in observation.walls]
+        for wall in set(self.walls.keys() + walls_as_tuples):
             if wall in observation.walls:
                 self.walls[wall].add(agent_id)
             else:
