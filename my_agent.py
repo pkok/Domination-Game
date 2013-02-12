@@ -19,6 +19,7 @@ class Agent(object):
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
         self.joint_observation = JointObservation(settings)
+        self.stateActionPairs = defaultdict(lambda: [None, None, 0])
 
         # Read the binary blob, we're not using it though
         if blob is not None:
@@ -280,6 +281,7 @@ class JointObservation(object):
             # Empty collections as neccesary 
             self.foes[self.step] = set()
             self.called_agents = set()
+            self.featuresExtracted = False
 
         self.friends[agent_id] = AgentData(observation.loc[0], observation.loc[1],
                 observation.angle, observation.ammo, observation.collided,
@@ -311,52 +313,90 @@ class JointObservation(object):
 
         self.called_agents.add(agent_id)
         if len(self.called_agents) == len(self.friends):
-            self.extract_features()
+            state = self.process_joint_observation() # Process the joint observation 
+            self.update_policy() # Update policy when joint observation has been processed
         
-    def extract_features(self):
+    def process_joint_observation(self):
         """ Creates an abstract representation of the observation, on which we will learn.
         """
-        pass
-        # self.features = {}
-        
-class Statespace(object):
+        state = State()
+        # TODO: compute state values based on joint observation
+        return state
+
+    def update_policy(self):
+        """ Update the joint policy of the agents based on the current state.
+        """
+
+
+
+########################################################################
+##### State class ######################################################
+########################################################################
+class State(object):
     
+        ########################################################################
+        ##### Feature binning definitions ######################################
+        ########################################################################
+
+        # Regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
+        regions = [((0,0),     (125,95)),
+                   ((126,0),   (180,95)),
+                   ((181,0),   (350,95)),
+                   ((351,0),   (460,95)),
+                   ((0,96),    (55,175)),
+                   ((56,96),   (125,175)),
+                   ((126,96),  (180,175)),
+                   ((181,96),  (285,175)),
+                   ((286,96),  (350,175)),
+                   ((351,96),  (410,175)),
+                   ((411,96),  (460,175)),
+                   ((0,176),   (125,265)),
+                   ((126,176), (285,265)),
+                   ((286,176), (350,265)),
+                   ((351,176), (460,265))
+                  ]
+        # Possible compass directions for the agents
+        directions = ["N", "E", "S", "W"]
+        # self.directions = ["N", "NE" "E", "SE", "S", "SW", "W", "NW"]
+
+        # Death timer ranges (binned)
+        death_timer_ranges = ("0", "1-3", "4-6", "7-10") #(0,3,6,10,15)
+
+
     def __init__(self):
         """ Statespace of the agent
             Assumptions:
             We can get the settings from the core file
             We know all the positions beforehand so these do not have to be defined here
         """
-        """ Agent location (region based - 16 regions for first map)
-            Agent orientation (4 (or 8?) possible values per agent)
-            Agent ammo possession (2 possible values per agent)
-            "Almost lost" ((score = behind && time is almost up && we do not control all CPs) OR
-            (score = almost at threshold losing value)) - (2 possible values)
-            CP's assumed to be controlled (2 possible values per control point)
-            Death timers (4 possible values per agent. Values: alive, 1-3, 4-6, 7-10)
+        """ -Agent location (region based - 16 regions for first map)
+            -Agent orientation (8 possible values per agent)
+            -Agent ammo possession (2 possible values per agent)
+            -“Almost lost” ((score = behind && time is almost up && we do not control all CPs) OR (score = almost at threshold losing value)) - (2 possible values)
+            -CP’s assumed to be controlled (2 possible values per control point)
+            -Death timers (4 possible values per agent. Values: alive, 1-3, 4-6, 7-10)
         """
-        #regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
-        self.regions = [((0,0),     (125,95)),
-                        ((126,0),   (180,95)),
-                        ((181,0),   (350,95)),
-                        ((351,0),   (460,95)),
-                        ((0,96),    (55,175)),
-                        ((56,96),   (125,175)),
-                        ((126,96),  (180,175)),
-                        ((181,96),  (285,175)),
-                        ((286,96),  (350,175)),
-                        ((351,96),  (410,175)),
-                        ((411,96),  (460,175)),
-                        ((0,176),   (125,265)),
-                        ((126,176), (285,265)),
-                        ((286,176), (350,265)),
-                        ((351,176), (460,265))
-                       ]
-        self.locations = {"agent1":(),"agent2":(),"agent3":()}
-        self.orientation = 0.0;
-        self.hasAmmo = {"agent1":False,"agent2":False,"agent3":False}
-        self.finalStand = False
-        self.controlpoints = {"cp1":False, "cp2":False}
-        self.ammoObserved = {"ammo1":0, "ammo2":0}
-        self.ammoRespawning = {"ammo1":False, "ammo2":False}
-        self.timerRanges = (0,3,6,10,15)
+
+        ########################################################################
+        ##### Feature parameter initializations ################################
+        ########################################################################
+
+        self.locations = defaultdict(tuple)
+        self.orientations = defaultdict(tuple)
+        self.death_timers = defaultdict(tuple)
+        self.has_ammo = defaultdict(bool)
+        self.final_stand = False
+        self.control_points = defaultdict(bool)
+        self.ammo_observed = defaultdict(bool)
+        self.ammoRespawning = defaultdict(bool)
+
+
+
+########################################################################
+##### Strategy class ###################################################
+########################################################################
+# class Strategy(object):
+
+#     strategies = ["Offensive", "Defensive", "Relentless"]
+
+#     def __init__(self)
