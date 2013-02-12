@@ -217,9 +217,9 @@ class Singleton(type):
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        else:
-            # Run __init__ every time the class is called
-            cls._instances[cls].__init__(*args, **kwargs)
+        #else:
+        #    # Run __init__ every time the class is called
+        #    cls._instances[cls].__init__(*args, **kwargs)
         return cls._instances[cls]
 
 # Container for data in the JointObservation.
