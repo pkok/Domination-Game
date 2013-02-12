@@ -53,12 +53,12 @@ class Agent(object):
             return a tuple in the form: (turn, speed, shoot)
         """ 
         # Set the goal of the action
-        self.setGoal(self.observation)
+        self.set_goal(self.observation)
         
         # Compute and return the corresponding action
-        return self.getAction(self.observation)
+        return self.get_action(self.observation)
     
-    def setGoal(self, obs):
+    def set_goal(self, obs):
         """This function sets the goal for the agent.
            Nobert, Thomas, Fernando: this is your turf!
         """
@@ -87,34 +87,54 @@ class Agent(object):
             not line_intersects_grid(obs.loc, obs.foes[0][0:2], self.grid, self.settings.tilesize)):
             self.goal = obs.foes[0][0:2]
     
-    def getAction(self, obs):
+    def get_action(self, obs):
         """This function returns the action for the agent.
            Patrick, Stijn: this is your turf!
         """
-        # Try to shoot enemies if they are within range
+        # Try to shoot enemies if they are within range and angle
         shoot = False
         if (obs.ammo > 0 and 
             obs.foes and 
             point_dist(obs.foes[0][0:2], obs.loc) < self.settings.max_range and
             not line_intersects_grid(obs.loc, obs.foes[0][0:2], self.grid, self.settings.tilesize)):
             
-            shoot = True
+            # Calculate angle and distance to enemy center
+            dxf = obs.foes[0][0] - obs.loc[0]
+            dyf = obs.foes[0][1] - obs.loc[1]
+            cen_angle = angle_fix(math.atan2(dyf, dxf) - obs.angle)
+            cen_dist = (dxf**2 + dyf**2)**0.5
+            
+            # Calculate angle between enemy center and edge
+            in_angle = math.asin(6.0 / cen_dist)
+            
+            # Calculate minimum angle the agent should turn to hit enemy
+            if cen_angle > 0:
+                if cen_angle >= in_angle:
+                    req_turn = cen_angle - in_angle
+                else:
+                    req_turn = 0 #ACTUALLY, CALCULATE ANGLE TO GOAL AND TURN AS FAR AS POSSIBLE
+            else:
+                if cen_angle <= -in_angle:
+                    req_turn = cen_angle + in_angle
+                else:
+                    req_turn = 0 #ACTUALLY, CALCULATE ANGLE TO GOAL AND TURN AS FAR AS POSSIBLE
+                            
+            if math.fabs(req_turn) <= self.settings.max_turn:
+                shoot = True
+                turn = req_turn
+            
             #Check for friendly fire
             for friendly in obs.friends:
                 if line_intersects_circ(obs.loc, obs.foes[0][0:2], friendly, 6):
                     shoot = False
-            
-
+        
         # Compute path, angle and speed
         path = find_path(obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
         if path:
             dx = path[0][0] - obs.loc[0]
             dy = path[0][1] - obs.loc[1]
-            turn = angle_fix(math.atan2(dy, dx) - obs.angle)
-            
-            # If target is outside the shooting angle, do not shoot
-            if turn > self.settings.max_turn or turn < -self.settings.max_turn:
-                shoot = False
+            if not shoot:
+                turn = angle_fix(math.atan2(dy, dx) - obs.angle)
             
             # Determine speed based on angle with planned path and planned distance
             maxangle = (math.pi/2)+self.settings.max_turn
@@ -125,7 +145,8 @@ class Agent(object):
                 speed = 0
             
             # If agent can at least face partly in the right direction, move some fraction of required distance
-            elif (turn > self.settings.max_turn and turn < maxangle) or (turn < -self.settings.max_turn and turn > -maxangle):
+            elif ((turn > self.settings.max_turn and turn < maxangle) or 
+                (turn < -self.settings.max_turn and turn > -maxangle)):
                 # Cap distance at 30 when not facing exactly in the right direction
                 if distance > 30:
                     distance = 30
@@ -134,7 +155,6 @@ class Agent(object):
             # If agent can reduce angle to zero, move the required distance
             else:
                 speed = distance
-        
         # If no path was found, do nothing
         else:
             turn = 0
