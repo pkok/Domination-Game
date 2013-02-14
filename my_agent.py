@@ -630,7 +630,7 @@ class Strategies(object):
 							  "am24"	: ("Agent1","cp2","Agent2","am2","Agent3","am2")
 							 }
 	
-	low_level_strats_full_ammo =  {"fa01"	: ("Agent1","am1","Agent2","am1","Agent3","am1"),
+    low_level_strats_full_ammo =  {"fa01"	: ("Agent1","am1","Agent2","am1","Agent3","am1"),
 								   "fa02"	: ("Agent1","am1","Agent2","am1","Agent3","am2"),
 								   "fa03"	: ("Agent1","am1","Agent2","am2","Agent3","am1"),
 								   "fa04"	: ("Agent1","am1","Agent2","am2","Agent3","am2"),
