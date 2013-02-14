@@ -554,7 +554,7 @@ class State(object):
 ########################################################################
 ##### Strategy class ###################################################
 ########################################################################
-class Strategy(object):
+class Strategies(object):
 
     # Our strategies define the % of bots that go for certain goals.
 
@@ -568,8 +568,77 @@ class Strategy(object):
                             "Full_ammo"      : (0, N)
                            }
 
-    # low_level_strats = 
+    low_level_strats_full_offense =  {"fo01"	: ("Agent1","cp1","Agent2","cp1","Agent3","cp1"),
+									  "fo02"	: ("Agent1","cp1","Agent2","cp1","Agent3","cp2"),
+									  "fo03"	: ("Agent1","cp1","Agent2","cp2","Agent3","cp1"),
+									  "fo04"	: ("Agent1","cp1","Agent2","cp2","Agent3","cp2"),
+									  "fo05"	: ("Agent1","cp2","Agent2","cp1","Agent3","cp1"),
+									  "fo06"	: ("Agent1","cp2","Agent2","cp1","Agent3","cp2"),
+									  "fo07"	: ("Agent1","cp2","Agent2","cp2","Agent3","cp1"),
+									  "fo08"	: ("Agent1","cp2","Agent2","cp2","Agent3","cp2")
+									 }
 
-
+    low_level_strats_normal_offense =  {"no01"	: ("Agent1","cp1","Agent2","cp1","Agent3","am1"),
+										"no02"	: ("Agent1","cp1","Agent2","cp1","Agent3","am2"),
+										"no03"	: ("Agent1","cp1","Agent2","cp2","Agent3","am1"),
+										"no04"	: ("Agent1","cp1","Agent2","cp2","Agent3","am2"),
+										"no05"	: ("Agent1","cp2","Agent2","cp1","Agent3","am1"),
+										"no06"	: ("Agent1","cp2","Agent2","cp1","Agent3","am2"),
+										"no07"	: ("Agent1","cp2","Agent2","cp2","Agent3","am1"),
+										"no08"	: ("Agent1","cp2","Agent2","cp2","Agent3","am2"),
+										"no09"	: ("Agent1","cp1","Agent2","am1","Agent3","cp1"),
+										"no10"	: ("Agent1","cp1","Agent2","am2","Agent3","cp1"),
+										"no11"	: ("Agent1","cp1","Agent2","am1","Agent3","cp2"),
+										"no12"	: ("Agent1","cp1","Agent2","am2","Agent3","cp2"),
+										"no13"	: ("Agent1","cp2","Agent2","am1","Agent3","cp1"),
+										"no14"	: ("Agent1","cp2","Agent2","am2","Agent3","cp1"),
+										"no15"	: ("Agent1","cp2","Agent2","am1","Agent3","cp2"),
+										"no16"	: ("Agent1","cp2","Agent2","am2","Agent3","cp2"),
+										"no17"	: ("Agent1","am1","Agent2","cp1","Agent3","cp1"),
+										"no18"	: ("Agent1","am2","Agent2","cp1","Agent3","cp1"),
+										"no19"	: ("Agent1","am1","Agent2","cp1","Agent3","cp2"),
+										"no20"	: ("Agent1","am2","Agent2","cp1","Agent3","cp2"),
+										"no21"	: ("Agent1","am1","Agent2","cp2","Agent3","cp1"),
+										"no22"	: ("Agent1","am2","Agent2","cp2","Agent3","cp1"),
+										"no23"	: ("Agent1","am1","Agent2","cp2","Agent3","cp2"),
+										"no24"	: ("Agent1","am2","Agent2","cp2","Agent3","cp2")
+									   }
+									   
+    low_level_strats_ammo =  {"am01"	: ("Agent1","am1","Agent2","am1","Agent3","cp1"),
+							  "am02"	: ("Agent1","am1","Agent2","am1","Agent3","cp2"),
+							  "am03"	: ("Agent1","am1","Agent2","am2","Agent3","cp1"),
+							  "am04"	: ("Agent1","am1","Agent2","am2","Agent3","cp2"),
+							  "am05"	: ("Agent1","am2","Agent2","am1","Agent3","cp1"),
+							  "am06"	: ("Agent1","am2","Agent2","am1","Agent3","cp2"),
+							  "am07"	: ("Agent1","am2","Agent2","am2","Agent3","cp1"),
+							  "am08"	: ("Agent1","am2","Agent2","am2","Agent3","cp2"),
+							  "am09"	: ("Agent1","am1","Agent2","cp1","Agent3","am1"),
+							  "am10"	: ("Agent1","am1","Agent2","cp2","Agent3","am1"),
+							  "am11"	: ("Agent1","am1","Agent2","cp1","Agent3","am2"),
+							  "am12"	: ("Agent1","am1","Agent2","cp2","Agent3","am2"),
+							  "am13"	: ("Agent1","am2","Agent2","cp1","Agent3","am1"),
+							  "am14"	: ("Agent1","am2","Agent2","cp2","Agent3","am1"),
+							  "am15"	: ("Agent1","am2","Agent2","cp1","Agent3","am2"),
+							  "am16"	: ("Agent1","am2","Agent2","cp2","Agent3","am2"),
+							  "am17"	: ("Agent1","cp1","Agent2","am1","Agent3","am1"),
+							  "am18"	: ("Agent1","cp2","Agent2","am1","Agent3","am1"),
+							  "am19"	: ("Agent1","cp1","Agent2","am1","Agent3","am2"),
+							  "am20"	: ("Agent1","cp2","Agent2","am1","Agent3","am2"),
+							  "am21"	: ("Agent1","cp1","Agent2","am2","Agent3","am1"),
+							  "am22"	: ("Agent1","cp2","Agent2","am2","Agent3","am1"),
+							  "am23"	: ("Agent1","cp1","Agent2","am2","Agent3","am2"),
+							  "am24"	: ("Agent1","cp2","Agent2","am2","Agent3","am2")
+							 }
+	
+	low_level_strats_full_ammo =  {"fa01"	: ("Agent1","am1","Agent2","am1","Agent3","am1"),
+								   "fa02"	: ("Agent1","am1","Agent2","am1","Agent3","am2"),
+								   "fa03"	: ("Agent1","am1","Agent2","am2","Agent3","am1"),
+								   "fa04"	: ("Agent1","am1","Agent2","am2","Agent3","am2"),
+								   "fa05"	: ("Agent1","am2","Agent2","am1","Agent3","am1"),
+								   "fa06"	: ("Agent1","am2","Agent2","am1","Agent3","am2"),
+								   "fa07"	: ("Agent1","am2","Agent2","am2","Agent3","am1"),
+								   "fa08"	: ("Agent1","am2","Agent2","am2","Agent3","am2")
+								  }
+							 
     def __init__(self):
         pass
