@@ -1,4 +1,5 @@
 from collections import defaultdict, namedtuple
+import math
 
 class Agent(object):
     
@@ -18,7 +19,7 @@ class Agent(object):
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
-        self.joint_observation = JointObservation(settings)
+        self.joint_observation = JointObservation(settings, team)
         self.state_strategy_pairs = defaultdict(lambda: [None, None, 0])
 
         # Read the binary blob, we're not using it though
@@ -40,11 +41,10 @@ class Agent(object):
             to determine your action. Note that the observation object
             is modified in place.
         """
-        self.joint_observation.update(self.id, observation)
-
         self.observation = observation
         self.selected = observation.selected
-
+        self.joint_observation.update(self.id, observation)
+        
         if observation.selected:
             print observation
                     
@@ -296,7 +296,7 @@ class JointObservation(object):
     """
     __metaclass__ = Singleton
 
-    def __init__(self, settings):
+    def __init__(self, settings, team):
 
         # Regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
         # cp = (((181,0),   (350,95)), ((126,176), (285,265)))
@@ -314,7 +314,10 @@ class JointObservation(object):
         #         ((351,176), (460,265))
         #        )
 
-        regions = [((0,0),     (125,95)),
+        
+        self.team = team        
+        
+        self.regions = [((0,0),     (125,95)),
                    ((126,0),   (180,95)),
                    ((181,0),   (350,95)),
                    ((351,0),   (460,95)),
@@ -427,7 +430,85 @@ class JointObservation(object):
         """ Creates an abstract representation of the observation, on which we will learn.
         """
         state = State()
+        
+        def in_region(self, x, y):
+            for idx, r in enumerate(self.regions):
+                if x <= r[1][0] and y <= r[1][1]:
+                    return idx
+         
+        def angle_to_wd(angle):
+            if angle <= 45:
+                return "N"
+            elif angle <= 135:
+                return "E"
+            elif angle <= 225:
+                return "S"
+            elif angle <= 315:
+                return "W"
+            else:
+                return "N"
+                
+        def timer_range(value):
+            if value <= 0:
+                return 0
+            elif value <= 3:
+                return 1
+            elif value <= 6:
+                return 2
+            elif value <= 10:
+                return 3
+            elif value <= 15:
+                return 4
+        
+        
         # TODO: compute state values based on joint observation
+        # TODO: Only ammo observation and ammo respawn left
+        agent_regions = ()
+        agent_directions = ()
+        agent_timers = ()
+        agent_ammo = ()
+        # agent_id: (x, y, angle, ammo, collided, respawn_in, hit)
+        for key, val in self.friends.items():
+            agent_regions = agent_regions + (in_region(self, val.x, val.y),) #friends[0,1]
+            agent_directions = agent_directions + (angle_to_wd(val.angle),) #friends[2]
+            agent_timers = agent_timers + (timer_range(val.respawn_in),)
+            agent_ammo = agent_ammo + (False if val.ammo == 0 else True,)
+        state.locations["regions"] = agent_regions    # 15 regions * agents
+        state.orientations["direction"] = agent_directions 
+        state.death_timers["timer"] = agent_timers #friends[5]
+        state.has_ammo["ammo"] = agent_ammo #friends[3]
+        
+        # hmmm..... hard to decide
+        state.final_stand = False
+        
+        # (x, y): (dominating_team, last_seen)
+        # (cp_top =  216, 56)
+        # (cp_bottom =  248, 216)
+        # check if dominating_team is own team,
+        # and check for difference in score if one is unknown
+        # if (self.cps["()"])
+        # self.diff_score = (0, 0)
+        cp_state = ()
+        cp_top = self.cps[(216, 56)]
+        cp_bottom = self.cps[(248, 216)]
+        cp_top_state = cp_top[0] == self.team
+        cp_bottom_state = cp_bottom[0] == self.team
+        # cases in which the score tells all
+        if self.diff_score == (-2,2):
+            cp_state = (False, False) if self.team == TEAM_RED else (True, True)
+        elif self.diff_score == (2,-2):
+            cp_state = (False, False) if self.team == TEAM_BLUE else (True, True)
+        # case in which score gives info about last seen
+        else:
+            cp_state = (cp_top_state, cp_bottom_state)
+        
+        state.control_points["cp"] = cp_state
+        
+        # (x, y, type): last_seen, disappeared_since
+        # if unknown estimate 0.5 times max_timer
+        
+        state.ammo_observed = defaultdict(bool)
+        state.ammoRespawning = defaultdict(bool)
         return state
 
     def update_policy(self):
@@ -478,10 +559,10 @@ class Strategy(object):
     # Our strategies define the % of bots that go for certain goals.
 
     # strategies =  "Name"      :  % CP     , % AM
-    N = len(self.friends)
-    two_third = ceil((2./3.)*N)
-    one_third = floor((1./3.)*N)
-    high_level_strats   =  {"Full_offense"   : (N, 0)
+    N = 3 #len(self.friends)
+    two_third = math.ceil((2./3.)*N)
+    one_third = math.floor((1./3.)*N)
+    high_level_strats   =  {"Full_offense"   : (N, 0),
                             "Normal_offense" : (two_third, one_third),
                             "Ammo"           : (one_third, two_third),
                             "Full_ammo"      : (0, N)
