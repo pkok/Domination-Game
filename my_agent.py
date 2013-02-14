@@ -299,6 +299,21 @@ class JointObservation(object):
     def __init__(self, settings):
 
         # Regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
+        # cp = (((181,0),   (350,95)), ((126,176), (285,265)))
+        # am = (((126,96),  (180,175)), ((286,96),  (350,175)))
+        # rest = (((0,0),     (125,95)),
+        #         ((126,0),   (180,95)),
+        #         ((351,0),   (460,95)),
+        #         ((0,96),    (55,175)),
+        #         ((56,96),   (125,175)),
+        #         ((181,96),  (285,175)),
+        #         ((351,96),  (410,175)),
+        #         ((411,96),  (460,175)),
+        #         ((0,176),   (125,265)),
+        #         ((286,176), (350,265)),
+        #         ((351,176), (460,265))
+        #        )
+
         regions = [((0,0),     (125,95)),
                    ((126,0),   (180,95)),
                    ((181,0),   (350,95)),
@@ -315,6 +330,9 @@ class JointObservation(object):
                    ((286,176), (350,265)),
                    ((351,176), (460,265))
                   ]
+
+        ROI = {"cp": (3, 13), "am": (7,9), "rest": (1,2,4,5,6,10,11,12,14,15)}
+
         # Possible compass directions for the agents
         directions = ["N", "E", "S", "W"]
         # self.directions = ["N", "NE" "E", "SE", "S", "SW", "W", "NW"]
@@ -430,7 +448,7 @@ class State(object):
             We know all the positions beforehand so these do not have to be defined here
         """
         """ -Agent location (region based - 16 regions for first map)
-            -Agent orientation (8 possible values per agent)
+            -Agent orientation (4 possible values per agent)
             -Agent ammo possession (2 possible values per agent)
             -"Almost lost" ((score = behind && time is almost up && we do not control all CPs) OR (score = almost at threshold losing value)) - (2 possible values)
             -CP's assumed to be controlled (2 possible values per control point)
@@ -441,7 +459,7 @@ class State(object):
         ##### Feature parameter initializations ################################
         ########################################################################
 
-        self.locations = defaultdict(tuple)
+        self.locations = defaultdict(tuple)    # 15 regions * agents
         self.orientations = defaultdict(tuple)
         self.death_timers = defaultdict(tuple)
         self.has_ammo = defaultdict(bool)
@@ -459,13 +477,18 @@ class Strategy(object):
 
     # Our strategies define the % of bots that go for certain goals.
 
-    # strategies =  "Name"      :  % offense  , % defensive , % get_ammo  
-    strategies   = {"Offensive" : (2./3., 0    , 1./3.),
-                    "Defensive" : (0.   , 2./3., 1./3.),
-                    "Ammo_def"  : (0.   , 2./3., 2./3.),
-                    "Ammo_off"  : (0.   , 2./3., 2./3.),
-                    "Relentless": (1.   , 0    , 0)
-                   }
-    
+    # strategies =  "Name"      :  % CP     , % AM
+    N = len(self.friends)
+    two_third = ceil((2./3.)*N)
+    one_third = floor((1./3.)*N)
+    high_level_strats   =  {"Full_offense"   : (N, 0)
+                            "Normal_offense" : (two_third, one_third),
+                            "Ammo"           : (one_third, two_third),
+                            "Full_ammo"      : (0, N)
+                           }
+
+    # low_level_strats = 
+
+
     def __init__(self):
         pass
