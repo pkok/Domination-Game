@@ -13,13 +13,13 @@ class Agent(object):
         """
         self.id = id
         self.team = team
-        self.mesh = nav_mesh
-        self.grid = field_grid
         self.settings = settings
+        self.joint_observation = JointObservation(settings, team, nav_mesh)
+        self.mesh = self.joint_observation.mesh 
+        self.grid = field_grid
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
-        self.joint_observation = JointObservation(settings, team)
         self.state_strategy_pairs = defaultdict(lambda: [None, None, 0])
 
         # Read the binary blob, we're not using it though
@@ -392,7 +392,7 @@ class JointObservation(object):
     """
     __metaclass__ = Singleton
 
-    def __init__(self, settings, team):
+    def __init__(self, settings, team, nav_mesh):
 
         # Regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
         # cp = (((181,0),   (350,95)), ((126,176), (285,265)))
@@ -412,6 +412,8 @@ class JointObservation(object):
 
         
         self.team = team        
+
+        self.mesh = transform_mesh(nav_mesh, lambda x: x)
         
         self.regions = [((0,0),     (125,95)),
                    ((126,0),   (180,95)),
@@ -430,14 +432,14 @@ class JointObservation(object):
                    ((351,176), (460,265))
                   ]
 
-        ROI = {"cp": (3, 13), "am": (7,9), "rest": (1,2,4,5,6,10,11,12,14,15)}
+        self.ROI = {"cp": (3, 13), "am": (7,9), "rest": (1,2,4,5,6,10,11,12,14,15)}
 
         # Possible compass directions for the agents
-        directions = ["N", "E", "S", "W"]
+        self.directions = ["N", "E", "S", "W"]
         # self.directions = ["N", "NE" "E", "SE", "S", "SW", "W", "NW"]
 
         # Death timer ranges (binned)
-        death_timer_ranges = ("0", "1-3", "4-6", "7-10") #(0,3,6,10,15)
+        self.death_timer_ranges = ("0", "1-3", "4-6", "7-10") #(0,3,6,10,15)
 
         # The game settings (not needed right now)
         self.settings = settings
@@ -738,3 +740,30 @@ class Strategies(object):
 							 
     def __init__(self):
         pass
+
+
+def mesh_steps(start, end, weight):
+    """ Compute a new weight for a nav_mesh's edge, based on travel time.
+    This should allow A* to think in terms of minimizing the number of actions
+    needed to reach the target. However, it is not finished yet, and it
+    doesn't work as nice as I hoped :(
+        - Patrick
+    """
+    move_count = math.ceil(weight / settings.max_speed)
+    if weight % settings.max_speed:
+        move_count += 1
+    return move_count
+
+def transform_mesh(nav_mesh, mesh_transform):
+    """ Recomputes a new weight for each edge of the navigation mesh.
+        
+        Each start and end point of an edge and its weight is given to
+        mesh_transform, and its return value is stored in a new mesh.
+    """
+    new_mesh = dict()
+    for start in nav_mesh.keys():
+        if start not in new_mesh:
+            new_mesh[start] = dict()
+        for end in nav_mesh[start].keys():
+            new_mesh[start][end] = mesh_transform(start, end, nav_mesh[start][end])
+    return new_mesh
