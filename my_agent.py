@@ -113,7 +113,7 @@ class Agent(object):
         if obs.ammo > 0 and obs.foes:
             
             # Calculate which foes are roughly within a possible angle or distance to shoot
-            shootable = []
+            approx_shootable = []
             for foe in obs.foes:
                 # Calculate angle and distance to center
                 dxf = foe[0] - obs.loc[0]
@@ -122,28 +122,25 @@ class Agent(object):
                 cen_dist = (dxf**2 + dyf**2)**0.5
                 
                 if (math.fabs(cen_angle) <= (self.settings.max_turn + pi/6) and 
-                    cen_dist <= (self.settings.max_range + 6)):
-                    shootable.append((foe[0],foe[1],cen_angle,cen_dist))
+                    cen_dist <= (self.settings.max_range + 6.0)):
+                    approx_shootable.append((foe[0],foe[1],cen_angle,cen_dist))
             
-            # Check for obstruction (currently checks only center of foe)
-            shootable2 = copy.deepcopy(shootable)
-            for foe in shootable:
-                # Check for walls
-                if line_intersects_grid(obs.loc, foe[0:2], self.grid, self.settings.tilesize):
-                    shootable2.remove(foe)
-                #Check for friendly fire
-                for friendly in obs.friends:
-                    if line_intersects_circ(obs.loc, foe[0:2], friendly, 6):
-                        shootable2.remove(foe)
-            
-            # Calculate exact min and max angles between which each foe can be shot
-            shootable3 = []
-            for foe in shootable2:
+            # Check for obstruction and compute best shooting angle per foe
+            really_shootable = []
+            for foe in approx_shootable:                    
+                # Calculate distance from foe center to edges
+                dxf = foe[0] - obs.loc[0]
+                dyf = foe[1] - obs.loc[1]
+                edge_angle = (math.pi/2)-math.asin(dxf/foe[3])                
+                dx_edge = math.cos(edge_angle)*6.0
+                dy_edge = math.sin(edge_angle)*6.0
+                if dyf < 0:
+                    dy_edge = -dy_edge
                 
-                # Calculate angle between enemy center and edge
-                in_angle = math.asin(6.0 / foe[3])*0.5
+                # Calculate angle between enemy center and edge (CURRENTLY TUNED LOWER!!)
+                in_angle = math.asin(6.0 / foe[3])*0.75
                 
-                # Calculate angles between foe can be hit
+                # Calculate angles to foe's edges and edge coords (CHANGE TO LEFT/RIGHT ANGLE INSTEAD)
                 cen_angle = foe[2]
                 if cen_angle > 0:
                     min_angle = cen_angle - in_angle
@@ -152,35 +149,133 @@ class Agent(object):
                     min_angle = cen_angle + in_angle
                     max_angle = cen_angle - in_angle
                 
-                # Check distance for these angles (NOT IMPLEMENTED YET)
-                if (self.settings.max_turn > math.fabs(min_angle) and 
-                    foe[3] < self.settings.max_range):
-                    shootable3.append((foe[0],foe[1],foe[2],foe[3],min_angle,max_angle))
-            
-            # Pick foe that can be shot on an angle that least distracts from agent's goal
-            for foe in shootable3:
-                cen_angle = foe[3]
-                min_angle = foe[4]
-                max_angle = foe[5]
+                # Check if center can be hit
+                cen_hit = True
+                #Check for angle
+                shootable, _ = self.calc_optimal_angle(cen_angle,cen_angle, False, cen_angle, path_angle)
+                if not shootable:
+                    cen_hit = False
+                # Check for walls
+                if cen_hit and line_intersects_grid(obs.loc, foe[0:2], self.grid, self.settings.tilesize):
+                    cen_hit = False
+                # Check for friendly fire (IMPLEMENT: ONLY CHECK IF FRIEND IS WITHIN RECTANGLE)
+                for friendly in obs.friends:
+                    if cen_hit and line_intersects_circ(obs.loc, foe[0:2], friendly, 6):
+                        cen_hit = False
                 
-                if (cen_angle > 0 and self.settings.max_turn >= min_angle):
-                    shoot = True
-                    if path_angle > max_angle:
-                        turn = max_angle
-                    elif path_angle < min_angle:
-                        turn = min_angle
-                    else:
-                        return (shoot,turn)
-                elif (cen_angle <= 0 and -self.settings.max_turn <= min_angle):
-                    shoot = True
-                    if path_angle < max_angle:
-                        turn = max_angle
-                    elif path_angle > min_angle:
-                        turn = min_angle
-                    else:
-                        return (shoot,turn)
+                # Check if left edge can be hit
+                left_hit = True
+                # Check for distance
+                left_dist = ((dxf-dx_edge)**2 + (dyf-dy_edge)**2)**0.5
+                if left_dist > self.settings.max_range:
+                    left_hit = False
+                #Check for angle
+                shootable, _ = self.calc_optimal_angle(min_angle,min_angle, False, cen_angle, path_angle)
+                if not shootable:
+                    left_hit = False
+                # Check for walls
+                if left_hit and line_intersects_grid(obs.loc, foe[0:2], self.grid, self.settings.tilesize):
+                    left_hit = False
+                # Check for friendly fire (IMPLEMENT: ONLY CHECK IF FRIEND IS WITHIN RECTANGLE)
+                for friendly in obs.friends:
+                    if left_hit and line_intersects_circ(obs.loc, foe[0:2], friendly, 6):
+                        left_hit = False
 
-        return (shoot, turn)
+                # Check if right edge can be hit
+                right_hit = True
+                # Check for distance
+                right_dist = ((dxf+dx_edge)**2 + (dyf+dy_edge)**2)**0.5
+                if right_dist > self.settings.max_range:
+                    right_hit = False
+                #Check for angle
+                shootable, _ = self.calc_optimal_angle(max_angle,max_angle, False, cen_angle, path_angle)
+                if not shootable:
+                    right_hit = False
+                # Check for walls
+                if line_intersects_grid(obs.loc, foe[0:2], self.grid, self.settings.tilesize):
+                    right_hit = False
+                # Check for friendly fire (IMPLEMENT: ONLY CHECK IF FRIEND IS WITHIN RECTANGLE)
+                for friendly in obs.friends:
+                    if left_hit and line_intersects_circ(obs.loc, foe[0:2], friendly, 6):
+                        right_hit = False
+
+                # Check optimal angle to shoot foe depending on which parts can be hit
+                opt_angle = 0
+                if cen_hit and left_hit and right_hit:
+                    _, opt_angle = self.calc_optimal_angle(min_angle, max_angle, True, cen_angle, path_angle)
+                elif cen_hit and left_hit and not right_hit:
+                    _, opt_angle = self.calc_optimal_angle(min_angle, cen_angle, True, cen_angle, path_angle)
+                elif cen_hit and right_hit and not left_hit:
+                    _, opt_angle = self.calc_optimal_angle(cen_angle, max_angle, True, cen_angle, path_angle)
+                elif cen_hit and not right_hit and not left_hit:
+                    _, opt_angle = self.calc_optimal_angle(cen_angle, cen_angle, False, cen_angle, path_angle)
+                elif cen_hit and not right_hit and not left_hit:
+                    _, opt_angle = self.calc_optimal_angle(cen_angle, cen_angle, False, cen_angle, path_angle)
+                elif right_hit and left_hit and not cen_hit:
+                    _, opt_angle = self.calc_optimal_angle(min_angle, max_angle, False, cen_angle, path_angle)
+                elif left_hit and not cen_hit and not right_hit:
+                    _, opt_angle = self.calc_optimal_angle(min_angle, min_angle, False, cen_angle, path_angle)
+                elif right_hit and not cen_hit and not left_hit:
+                    _, opt_angle = self.calc_optimal_angle(max_angle, max_angle, False, cen_angle, path_angle)
+                
+                if cen_hit or left_hit or right_hit:
+                    really_shootable.append((foe[0],foe[1],opt_angle))
+            
+            # Decide which shootable foe to shoot
+            best_dif = 100.0
+            for foe in really_shootable:
+                shoot = True
+                cur_dif = math.fabs(path_angle - foe[2]) 
+                if cur_dif < best_dif:
+                    best_dif = cur_dif
+                    turn = foe[2]
+
+        return shoot, turn
+    
+    def calc_optimal_angle(self, min_angle, max_angle, interval, cen_angle, path_angle):
+        """This function returns the optimal angle given some (interval of) angles
+        """
+        optimal_angle = 0
+        shootable = False
+        
+        # If only one possible angle, see if it is within turning range
+        if (not interval and min_angle == max_angle and 
+            math.fabs(min_angle) <= self.settings.max_turn):
+            shootable = True
+            optimal_angle = min_angle
+        
+        # If two possible angles, see which one is in turning range and closest to path angle
+        elif (not interval and not min_angle == max_angle):
+            if math.fabs(min_angle) <= self.settings.max_turn:
+                shootable = True
+                optimal_angle = min_angle
+
+            elif (math.fabs(max_angle) <= self.settings.max_turn and 
+                math.fabs(path_angle - min_angle) > math.fabs(path_angle - max_angle)):
+                shootable = True
+                optimal_angle = max_angle
+        
+        # If interval of angles, find value closest to path angle
+        elif interval:
+            # Account for positive/negative angles
+            if cen_angle > 0 and min_angle <= self.settings.max_turn:
+                shootable = True
+                if path_angle > max_angle:
+                    optimal_angle = max_angle
+                elif path_angle < min_angle:
+                    optimal_angle = min_angle
+                else:
+                    optimal_angle = path_angle
+            if cen_angle < 0 and min_angle >= -self.settings.max_turn:
+                shootable = True
+                if path_angle < max_angle:
+                    optimal_angle = max_angle
+                elif path_angle > min_angle:
+                    optimal_angle = min_angle
+                else:
+                    optimal_angle = path_angle
+
+        return shootable, optimal_angle
     
     def compute_speed(self, turn, dx, dy):
         # Compute speed based on angle with planned path and planned distance
@@ -205,6 +300,8 @@ class Agent(object):
             speed = distance
         
         return speed
+    
+
     
     def debug(self, surface):
         """ Allows the agents to draw on the game UI,
@@ -268,7 +365,6 @@ class Agent(object):
             store any learned variables and write logs/reports.
         """
         pass
-        
 
 class Singleton(type):
     """ Metaclass so only a single object from a class can be created.
@@ -572,7 +668,7 @@ class State(object):
 ########################################################################
 ##### Strategy class ###################################################
 ########################################################################
-class Strategy(object):
+class Strategies(object):
 
     # Our strategies define the % of bots that go for certain goals.
 
@@ -586,8 +682,77 @@ class Strategy(object):
                             "Full_ammo"      : (0, N)
                            }
 
-    # low_level_strats = 
+    low_level_strats_full_offense =  {"fo01"	: ("Agent1","cp1","Agent2","cp1","Agent3","cp1"),
+									  "fo02"	: ("Agent1","cp1","Agent2","cp1","Agent3","cp2"),
+									  "fo03"	: ("Agent1","cp1","Agent2","cp2","Agent3","cp1"),
+									  "fo04"	: ("Agent1","cp1","Agent2","cp2","Agent3","cp2"),
+									  "fo05"	: ("Agent1","cp2","Agent2","cp1","Agent3","cp1"),
+									  "fo06"	: ("Agent1","cp2","Agent2","cp1","Agent3","cp2"),
+									  "fo07"	: ("Agent1","cp2","Agent2","cp2","Agent3","cp1"),
+									  "fo08"	: ("Agent1","cp2","Agent2","cp2","Agent3","cp2")
+									 }
 
-
+    low_level_strats_normal_offense =  {"no01"	: ("Agent1","cp1","Agent2","cp1","Agent3","am1"),
+										"no02"	: ("Agent1","cp1","Agent2","cp1","Agent3","am2"),
+										"no03"	: ("Agent1","cp1","Agent2","cp2","Agent3","am1"),
+										"no04"	: ("Agent1","cp1","Agent2","cp2","Agent3","am2"),
+										"no05"	: ("Agent1","cp2","Agent2","cp1","Agent3","am1"),
+										"no06"	: ("Agent1","cp2","Agent2","cp1","Agent3","am2"),
+										"no07"	: ("Agent1","cp2","Agent2","cp2","Agent3","am1"),
+										"no08"	: ("Agent1","cp2","Agent2","cp2","Agent3","am2"),
+										"no09"	: ("Agent1","cp1","Agent2","am1","Agent3","cp1"),
+										"no10"	: ("Agent1","cp1","Agent2","am2","Agent3","cp1"),
+										"no11"	: ("Agent1","cp1","Agent2","am1","Agent3","cp2"),
+										"no12"	: ("Agent1","cp1","Agent2","am2","Agent3","cp2"),
+										"no13"	: ("Agent1","cp2","Agent2","am1","Agent3","cp1"),
+										"no14"	: ("Agent1","cp2","Agent2","am2","Agent3","cp1"),
+										"no15"	: ("Agent1","cp2","Agent2","am1","Agent3","cp2"),
+										"no16"	: ("Agent1","cp2","Agent2","am2","Agent3","cp2"),
+										"no17"	: ("Agent1","am1","Agent2","cp1","Agent3","cp1"),
+										"no18"	: ("Agent1","am2","Agent2","cp1","Agent3","cp1"),
+										"no19"	: ("Agent1","am1","Agent2","cp1","Agent3","cp2"),
+										"no20"	: ("Agent1","am2","Agent2","cp1","Agent3","cp2"),
+										"no21"	: ("Agent1","am1","Agent2","cp2","Agent3","cp1"),
+										"no22"	: ("Agent1","am2","Agent2","cp2","Agent3","cp1"),
+										"no23"	: ("Agent1","am1","Agent2","cp2","Agent3","cp2"),
+										"no24"	: ("Agent1","am2","Agent2","cp2","Agent3","cp2")
+									   }
+									   
+    low_level_strats_ammo =  {"am01"	: ("Agent1","am1","Agent2","am1","Agent3","cp1"),
+							  "am02"	: ("Agent1","am1","Agent2","am1","Agent3","cp2"),
+							  "am03"	: ("Agent1","am1","Agent2","am2","Agent3","cp1"),
+							  "am04"	: ("Agent1","am1","Agent2","am2","Agent3","cp2"),
+							  "am05"	: ("Agent1","am2","Agent2","am1","Agent3","cp1"),
+							  "am06"	: ("Agent1","am2","Agent2","am1","Agent3","cp2"),
+							  "am07"	: ("Agent1","am2","Agent2","am2","Agent3","cp1"),
+							  "am08"	: ("Agent1","am2","Agent2","am2","Agent3","cp2"),
+							  "am09"	: ("Agent1","am1","Agent2","cp1","Agent3","am1"),
+							  "am10"	: ("Agent1","am1","Agent2","cp2","Agent3","am1"),
+							  "am11"	: ("Agent1","am1","Agent2","cp1","Agent3","am2"),
+							  "am12"	: ("Agent1","am1","Agent2","cp2","Agent3","am2"),
+							  "am13"	: ("Agent1","am2","Agent2","cp1","Agent3","am1"),
+							  "am14"	: ("Agent1","am2","Agent2","cp2","Agent3","am1"),
+							  "am15"	: ("Agent1","am2","Agent2","cp1","Agent3","am2"),
+							  "am16"	: ("Agent1","am2","Agent2","cp2","Agent3","am2"),
+							  "am17"	: ("Agent1","cp1","Agent2","am1","Agent3","am1"),
+							  "am18"	: ("Agent1","cp2","Agent2","am1","Agent3","am1"),
+							  "am19"	: ("Agent1","cp1","Agent2","am1","Agent3","am2"),
+							  "am20"	: ("Agent1","cp2","Agent2","am1","Agent3","am2"),
+							  "am21"	: ("Agent1","cp1","Agent2","am2","Agent3","am1"),
+							  "am22"	: ("Agent1","cp2","Agent2","am2","Agent3","am1"),
+							  "am23"	: ("Agent1","cp1","Agent2","am2","Agent3","am2"),
+							  "am24"	: ("Agent1","cp2","Agent2","am2","Agent3","am2")
+							 }
+	
+    low_level_strats_full_ammo =  {"fa01"	: ("Agent1","am1","Agent2","am1","Agent3","am1"),
+								   "fa02"	: ("Agent1","am1","Agent2","am1","Agent3","am2"),
+								   "fa03"	: ("Agent1","am1","Agent2","am2","Agent3","am1"),
+								   "fa04"	: ("Agent1","am1","Agent2","am2","Agent3","am2"),
+								   "fa05"	: ("Agent1","am2","Agent2","am1","Agent3","am1"),
+								   "fa06"	: ("Agent1","am2","Agent2","am1","Agent3","am2"),
+								   "fa07"	: ("Agent1","am2","Agent2","am2","Agent3","am1"),
+								   "fa08"	: ("Agent1","am2","Agent2","am2","Agent3","am2")
+								  }
+							 
     def __init__(self):
         pass
