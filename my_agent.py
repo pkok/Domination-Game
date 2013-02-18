@@ -406,7 +406,9 @@ class JointObservation(object):
             if distance < self.settings.max_see:
                 if obj in observation.objects:
                     self.objects[obj][0] = self.step
-                else:
+                # only update disappeared_since when the 
+                # object is not already reported missing
+                elif self.objects[obj][1] < self.objects[obj][0]:
                     self.objects[obj][1] = self.step
         walls_as_tuples = [tuple(w) for w in observation.walls]
         for wall in set(self.walls.keys() + walls_as_tuples):
@@ -506,9 +508,25 @@ class JointObservation(object):
         
         # (x, y, type): last_seen, disappeared_since
         # if unknown estimate 0.5 times max_timer
-        
-        state.ammo_observed = defaultdict(bool)
-        state.ammoRespawning = defaultdict(bool)
+        ammo_missing = ()
+        ammo_spawn_range = ()
+        for key, value in self.objects.items():
+            if key[2] == "Ammo": 
+                ammo_spawns_in = timer_range((value[1] + value[0] +1)/2 + self.settings.ammo_rate - self.step)
+                #ammo was last seen
+                if value[0] > value[1]:
+                    ammo_missing = ammo_missing + (False,)
+                    ammo_spawn_range = ammo_spawn_range + (0,)
+                #grabbed it ourselves or saw it get grabbed
+                elif value[1] > value[0] and ammo_spawns_in > 0: 
+                    ammo_missing = ammo_missing + (True,)
+                    ammo_spawn_range = ammo_spawn_range + (ammo_spawns_in,)
+                elif ammo_spawns_in == 0:
+                    ammo_missing = ammo_missing + (False,)
+                    ammo_spawn_range = ammo_spawn_range + (ammo_spawns_in,)
+                    
+        state.ammo_timer["ammo"] = ammo_spawn_range
+        state.ammoRespawning["ammo"] = ammo_missing
         return state
 
     def update_policy(self):
@@ -546,7 +564,7 @@ class State(object):
         self.has_ammo = defaultdict(bool)
         self.final_stand = False
         self.control_points = defaultdict(bool)
-        self.ammo_observed = defaultdict(bool)
+        self.ammo_timer = defaultdict(tuple)
         self.ammoRespawning = defaultdict(bool)
 
 
