@@ -1,4 +1,8 @@
+#!/usr/bin/env python
+
 import math
+import sys
+
 from domination import core, scenarios
 
 FIELD = """
@@ -35,9 +39,9 @@ class Tournament1(scenarios.Scenario):
                               max_turn=math.pi/4,
                               think_time=0.06,)
 
-
-# Tournament1.one_on_one(red="my_agent.py", blue="domination/agent.py", output_folder='_tmp')
-# Tournament1.test(red="domination/agent.py", blue="domination/agent.py")
-
-# This is what is used to run the tournament:
-Tournament1.tournament(agents=["my_agent.py", "domination/agent_controllable.py"], output_folder='_tmp')
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "test": 
+        Tournament1.test(red="my_agent.py", blue="domination/agent.py")
+    else:
+        # This is what is used to run the tournament: 
+        Tournament1.tournament(agents=["my_agent.py", "domination/agent_controllable.py"], output_folder='_tmp')
