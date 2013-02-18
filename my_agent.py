@@ -88,12 +88,12 @@ class Agent(object):
             dx = path[0][0] - obs.loc[0]
             dy = path[0][1] - obs.loc[1]
             path_angle = angle_fix(math.atan2(dy, dx) - obs.angle)
+            path_dist = (dx**2 + dy**2)**0.5
 
             # Compute shoot and turn
             shoot, turn = self.compute_shoot(obs, path_angle)
-            
             # Compute speed
-            speed = self.compute_speed(turn, dx, dy)
+            speed = self.compute_speed(turn, path_dist)
 
         # If no path was found, do nothing
         else:
@@ -111,54 +111,48 @@ class Agent(object):
         
         # Check for ammo and nearby enemies
         if obs.ammo > 0 and obs.foes:
-            
             # Calculate which foes are roughly within a possible angle or distance to shoot
             approx_shootable = []
             for foe in obs.foes:
-                # Calculate angle and distance to center
-                dxf = foe[0] - obs.loc[0]
-                dyf = foe[1] - obs.loc[1]
-                cen_angle = angle_fix(math.atan2(dyf, dxf) - obs.angle)
-                cen_dist = (dxf**2 + dyf**2)**0.5
+                # Calculate angle and distance to center of foe
+                dx = foe[0] - obs.loc[0]
+                dy = foe[1] - obs.loc[1]
+                cen_angle = angle_fix(math.atan2(dy, dx) - obs.angle)
+                cen_dist = (dx**2 + dy**2)**0.5
                 
                 if (math.fabs(cen_angle) <= (self.settings.max_turn + pi/6) and 
                     cen_dist <= (self.settings.max_range + 6.0)):
-                    approx_shootable.append((foe[0],foe[1],cen_angle,cen_dist))
+                    approx_shootable.append((foe[0],foe[1],cen_angle,cen_dist,dx,dy))
             
             # Check for obstruction and compute best shooting angle per foe
             really_shootable = []
             for foe in approx_shootable:                    
                 # Calculate distance from foe center to edges
-                dxf = foe[0] - obs.loc[0]
-                dyf = foe[1] - obs.loc[1]
-                edge_angle = (math.pi/2)-math.asin(dxf/foe[3])                
-                dx_edge = math.cos(edge_angle)*6.0
-                dy_edge = math.sin(edge_angle)*6.0
-                if dyf < 0:
-                    dy_edge = -dy_edge
-                
-                # Calculate angle between enemy center and edge (CURRENTLY TUNED LOWER!!)
-                in_angle = math.asin(6.0 / foe[3])*0.75
-                
-                # Calculate angles to foe's edges and edge coords (CHANGE TO LEFT/RIGHT ANGLE INSTEAD)
+                dx = foe[4]
+                dy = foe[5]
+                edge_angle = (math.pi/2)-math.asin(dx/foe[3])
+                dx_edge = math.sin(edge_angle)*6.0*0.85
+                dy_edge = math.cos(edge_angle)*6.0*0.85
+                if dy > 0:
+                    dx_edge = -dx_edge
+ 
+                # Calculate angles and coords of foe's edges
                 cen_angle = foe[2]
-                if cen_angle > 0:
-                    min_angle = cen_angle - in_angle
-                    max_angle = cen_angle + in_angle
-                else:
-                    min_angle = cen_angle + in_angle
-                    max_angle = cen_angle - in_angle
+                left_angle = angle_fix(math.atan2(dy-dy_edge, dx-dx_edge) - obs.angle)
+                right_angle = angle_fix(math.atan2(dy+dy_edge, dx+dx_edge) - obs.angle)
+                left_coords = (foe[0]-dx_edge,foe[1]-dy_edge)
+                right_coords = (foe[0]+dx_edge,foe[1]+dy_edge)
+                edge_dist = ((dx+dx_edge)**2 + (dy+dy_edge)**2)**0.5
                 
                 # Check if center can be hit
                 cen_hit = True
-                #Check for angle
-                shootable, _ = self.calc_optimal_angle(cen_angle,cen_angle, False, cen_angle, path_angle)
-                if not shootable:
+                # Check for angle
+                if not self.angle_possible(cen_angle):
                     cen_hit = False
                 # Check for walls
                 if cen_hit and line_intersects_grid(obs.loc, foe[0:2], self.grid, self.settings.tilesize):
                     cen_hit = False
-                # Check for friendly fire (IMPLEMENT: ONLY CHECK IF FRIEND IS WITHIN RECTANGLE)
+                # Check for friendly fire
                 for friendly in obs.friends:
                     if cen_hit and line_intersects_circ(obs.loc, foe[0:2], friendly, 6):
                         cen_hit = False
@@ -166,121 +160,103 @@ class Agent(object):
                 # Check if left edge can be hit
                 left_hit = True
                 # Check for distance
-                left_dist = ((dxf-dx_edge)**2 + (dyf-dy_edge)**2)**0.5
-                if left_dist > self.settings.max_range:
+                if edge_dist > self.settings.max_range:
                     left_hit = False
-                #Check for angle
-                shootable, _ = self.calc_optimal_angle(min_angle,min_angle, False, cen_angle, path_angle)
-                if not shootable:
+                # Check for angle
+                if not self.angle_possible(left_angle):
                     left_hit = False
                 # Check for walls
-                if left_hit and line_intersects_grid(obs.loc, foe[0:2], self.grid, self.settings.tilesize):
+                if left_hit and line_intersects_grid(obs.loc, left_coords, self.grid, self.settings.tilesize):
                     left_hit = False
-                # Check for friendly fire (IMPLEMENT: ONLY CHECK IF FRIEND IS WITHIN RECTANGLE)
+                # Check for friendly fire
                 for friendly in obs.friends:
-                    if left_hit and line_intersects_circ(obs.loc, foe[0:2], friendly, 6):
+                    if left_hit and line_intersects_circ(obs.loc, left_coords, friendly, 6):
                         left_hit = False
 
                 # Check if right edge can be hit
                 right_hit = True
                 # Check for distance
-                right_dist = ((dxf+dx_edge)**2 + (dyf+dy_edge)**2)**0.5
-                if right_dist > self.settings.max_range:
+                if edge_dist > self.settings.max_range:
                     right_hit = False
                 #Check for angle
-                shootable, _ = self.calc_optimal_angle(max_angle,max_angle, False, cen_angle, path_angle)
-                if not shootable:
+                if not self.angle_possible(right_angle):
                     right_hit = False
                 # Check for walls
-                if line_intersects_grid(obs.loc, foe[0:2], self.grid, self.settings.tilesize):
+                if line_intersects_grid(obs.loc, right_coords, self.grid, self.settings.tilesize):
                     right_hit = False
-                # Check for friendly fire (IMPLEMENT: ONLY CHECK IF FRIEND IS WITHIN RECTANGLE)
+                # Check for friendly fire
                 for friendly in obs.friends:
-                    if left_hit and line_intersects_circ(obs.loc, foe[0:2], friendly, 6):
+                    if left_hit and line_intersects_circ(obs.loc, right_coords, friendly, 6):
                         right_hit = False
 
                 # Check optimal angle to shoot foe depending on which parts can be hit
                 opt_angle = 0
                 if cen_hit and left_hit and right_hit:
-                    _, opt_angle = self.calc_optimal_angle(min_angle, max_angle, True, cen_angle, path_angle)
+                    opt_angle = self.calc_optimal_angle(left_angle, right_angle, True, cen_angle, path_angle)
                 elif cen_hit and left_hit and not right_hit:
-                    _, opt_angle = self.calc_optimal_angle(min_angle, cen_angle, True, cen_angle, path_angle)
+                    opt_angle = self.calc_optimal_angle(left_angle, cen_angle, True, cen_angle, path_angle)
                 elif cen_hit and right_hit and not left_hit:
-                    _, opt_angle = self.calc_optimal_angle(cen_angle, max_angle, True, cen_angle, path_angle)
-                elif cen_hit and not right_hit and not left_hit:
-                    _, opt_angle = self.calc_optimal_angle(cen_angle, cen_angle, False, cen_angle, path_angle)
-                elif cen_hit and not right_hit and not left_hit:
-                    _, opt_angle = self.calc_optimal_angle(cen_angle, cen_angle, False, cen_angle, path_angle)
+                    opt_angle = self.calc_optimal_angle(cen_angle, right_angle, True, cen_angle, path_angle)
                 elif right_hit and left_hit and not cen_hit:
-                    _, opt_angle = self.calc_optimal_angle(min_angle, max_angle, False, cen_angle, path_angle)
+                    opt_angle = self.calc_optimal_angle(left_angle, right_angle, False, cen_angle, path_angle)
+                elif cen_hit and not right_hit and not left_hit:
+                    opt_angle = cen_angle
                 elif left_hit and not cen_hit and not right_hit:
-                    _, opt_angle = self.calc_optimal_angle(min_angle, min_angle, False, cen_angle, path_angle)
+                    opt_angle = left_angle
                 elif right_hit and not cen_hit and not left_hit:
-                    _, opt_angle = self.calc_optimal_angle(max_angle, max_angle, False, cen_angle, path_angle)
+                    opt_angle = right_angle
                 
                 if cen_hit or left_hit or right_hit:
                     really_shootable.append((foe[0],foe[1],opt_angle))
             
-            # Decide which shootable foe to shoot
-            best_dif = 100.0
-            for foe in really_shootable:
+            # Shoot the foe that requires the agent to deviate from its path the least
+            if really_shootable:
                 shoot = True
-                cur_dif = math.fabs(path_angle - foe[2]) 
-                if cur_dif < best_dif:
-                    best_dif = cur_dif
-                    turn = foe[2]
+                best_dif = 100.0
+                for foe in really_shootable:
+                    cur_dif = math.fabs(path_angle - foe[2]) 
+                    if cur_dif < best_dif:
+                        best_dif = cur_dif
+                        turn = foe[2]
 
         return shoot, turn
     
-    def calc_optimal_angle(self, min_angle, max_angle, interval, cen_angle, path_angle):
+    def angle_possible(self, angle):
+        """This function checks whether the agent can turn the given angle
+        """
+        if math.fabs(angle) <= self.settings.max_turn:
+            return True
+        else:
+            return False
+    
+    def calc_optimal_angle(self, left_angle, right_angle, interval, cen_angle, path_angle):
         """This function returns the optimal angle given some (interval of) angles
         """
         optimal_angle = 0
-        shootable = False
-        
-        # If only one possible angle, see if it is within turning range
-        if (not interval and min_angle == max_angle and 
-            math.fabs(min_angle) <= self.settings.max_turn):
-            shootable = True
-            optimal_angle = min_angle
-        
+              
         # If two possible angles, see which one is in turning range and closest to path angle
-        elif (not interval and not min_angle == max_angle):
-            if math.fabs(min_angle) <= self.settings.max_turn:
-                shootable = True
-                optimal_angle = min_angle
-
-            elif (math.fabs(max_angle) <= self.settings.max_turn and 
-                math.fabs(path_angle - min_angle) > math.fabs(path_angle - max_angle)):
-                shootable = True
+        if not interval:            
+            if (math.fabs(path_angle - min_angle) > math.fabs(path_angle - max_angle)):
                 optimal_angle = max_angle
+            else:
+                optimal_angle = min_angle
         
         # If interval of angles, find value closest to path angle
-        elif interval:
+        else:
             # Account for positive/negative angles
-            if cen_angle > 0 and min_angle <= self.settings.max_turn:
-                shootable = True
-                if path_angle > max_angle:
-                    optimal_angle = max_angle
-                elif path_angle < min_angle:
-                    optimal_angle = min_angle
-                else:
-                    optimal_angle = path_angle
-            if cen_angle < 0 and min_angle >= -self.settings.max_turn:
-                shootable = True
-                if path_angle < max_angle:
-                    optimal_angle = max_angle
-                elif path_angle > min_angle:
-                    optimal_angle = min_angle
-                else:
-                    optimal_angle = path_angle
+            if path_angle > right_angle:
+                optimal_angle = right_angle
+            elif path_angle < left_angle:
+                optimal_angle = left_angle
+            else:
+                optimal_angle = path_angle
 
-        return shootable, optimal_angle
+        return optimal_angle
     
-    def compute_speed(self, turn, dx, dy):
+    def compute_speed(self, turn, distance):
         # Compute speed based on angle with planned path and planned distance
         maxangle = (math.pi/2)+self.settings.max_turn
-        distance = (dx**2 + dy**2)**0.5
+        
         
         #If agent cannot reduce angle to below 90 degrees by turning, set speed to zero
         if turn >= maxangle or turn <= -maxangle:
@@ -300,9 +276,7 @@ class Agent(object):
             speed = distance
         
         return speed
-    
 
-    
     def debug(self, surface):
         """ Allows the agents to draw on the game UI,
             Refer to the pygame reference to see how you can
@@ -317,31 +291,19 @@ class Agent(object):
             surface.fill((0,0,0,0))
 
         """
-        # Draw the agent field of vision
+        # Draw the agent field of vision and max shooting range
         fov_rect = pygame.Rect(self.observation.loc[0] - (self.settings.max_see),
-                               self.observation.loc[1] - (self.settings.max_see),
-                              2 * self.settings.max_see,
-                               2 * self.settings.max_see)
+                                self.observation.loc[1] - (self.settings.max_see),
+                                2 * self.settings.max_see,
+                                2 * self.settings.max_see)
                                
-        pygame.draw.rect(surface,
-                         (0,0,255),
-                         fov_rect,
-                         1)
+        pygame.draw.rect(surface, (0,0,255), fov_rect, 1)
+        
+        pygame.draw.circle(surface, (255,0,0,90), self.observation.loc, self.settings.max_range) 
+
+        """
 
         
-        # Draw the agent shooting arc
-        shoot_rect = pygame.Rect(self.observation.loc[0] - (self.settings.max_range),
-                               self.observation.loc[1] - (self.settings.max_range),
-                              2 * self.settings.max_range,
-                               2 * self.settings.max_range)                       
-            
-        pygame.draw.arc(surface,
-                           (255,0,0,90),
-                           shoot_rect,
-                           -self.settings.max_turn-self.observation.angle,
-                           self.settings.max_turn-self.observation.angle,
-                           1)
-        """
         # Selected agents draw their info
         if self.selected:
             # Draw line directly to goal
