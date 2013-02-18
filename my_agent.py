@@ -413,7 +413,8 @@ class JointObservation(object):
         
         self.team = team        
 
-        self.mesh = transform_mesh(nav_mesh, lambda x: x)
+        # keeping it the same while I don't have a correct function. - P.
+        self.mesh = transform_mesh(nav_mesh, lambda start, end, weight: weight) 
         
         self.regions = [((0,0),     (125,95)),
                    ((126,0),   (180,95)),
