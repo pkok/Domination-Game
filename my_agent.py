@@ -413,8 +413,20 @@ class JointObservation(object):
         
         self.team = team        
 
+        def mesh_steps(start, end, weight):
+            """ Compute a new weight for a nav_mesh's edge, based on travel time.
+            This should allow A* to think in terms of minimizing the number of actions
+            needed to reach the target. However, it is not finished yet, and it
+            doesn't work as nice as I hoped :(
+                - Patrick
+            """
+            move_count = math.ceil(weight / settings.max_speed)
+            return move_count
+
         # keeping it the same while I don't have a correct function. - P.
-        self.mesh = transform_mesh(nav_mesh, lambda start, end, weight: weight) 
+        #self.mesh = transform_mesh(nav_mesh, lambda start, end, weight: weight) 
+        self.mesh = transform_mesh(nav_mesh, mesh_steps)
+        print self.mesh
         
         self.regions = [((0,0),     (125,95)),
                    ((126,0),   (180,95)),
@@ -760,18 +772,6 @@ class Strategies(object):
     def __init__(self):
         pass
 
-
-def mesh_steps(start, end, weight):
-    """ Compute a new weight for a nav_mesh's edge, based on travel time.
-    This should allow A* to think in terms of minimizing the number of actions
-    needed to reach the target. However, it is not finished yet, and it
-    doesn't work as nice as I hoped :(
-        - Patrick
-    """
-    move_count = math.ceil(weight / settings.max_speed)
-    if weight % settings.max_speed:
-        move_count += 1
-    return move_count
 
 def transform_mesh(nav_mesh, mesh_transform):
     """ Recomputes a new weight for each edge of the navigation mesh.
