@@ -24,15 +24,14 @@ class Agent(object):
         self.epsilon = 0.05
         self.initial_value = 10
         self.state_action_pairs = AutoVivification()
-        self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
-        self.joint_observation = JointObservation(settings, team, nav_mesh, self.state_action_pairs, self.joint_actions, self.epsilon, self.initial_value)
+        # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
+        self.joint_observation = JointObservation(settings, team, nav_mesh, self.state_action_pairs, self.epsilon, self.initial_value)
         self.joint_action = (3,3,7) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh 
         self.grid = field_grid
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
-
 
         # Read the binary blob, we're not using it though
         if blob is not None:
@@ -45,28 +44,7 @@ class Agent(object):
         if id == 0:
             self.all_agents = self.__class__.all_agents = []
         self.all_agents.append(self)
-    
-    def createJointActions(self, joint_observation):
-        joint_actions = []
 
-		N = len(joint_observation.friends)
-        cp = joint_observation.ROI["cp"]
-        am = joint_observation.ROI["am"]
-		interestRegions = cp + am
-		"""
-        N = len(joint_observation.friends)
-        cp = joint_observation.ROI["cp"]
-        am = joint_observation.ROI["am"]
-
-        two_third = math.ceil((2./3.)*N)
-        one_third = math.floor((1./3.)*N)
-
-        # Strats contains a list of tuples dividing the agents between (1) control points and (2) ammo points.
-        strats = [(N, 0), (two_third, one_third), (one_third, two_third), (0, N)]
-		"""
-		joint_actions = product(interestRegions,repeat=N)
-
-        return joint_actions
 
     def observe(self, observation):
         """ Each agent is passed an observation using this function,
@@ -389,38 +367,39 @@ class JointObservation(object):
     """
     __metaclass__ = Singleton
 
-    def __init__(self, settings, team, nav_mesh, state_action_pairs, joint_actions, epsilon,  initial_value):
+    def __init__(self, settings, team, nav_mesh, state_action_pairs, epsilon, initial_value):
         
         self.team = team        
         # keeping it the same while I don't have a correct function. - P.
         self.mesh = transform_mesh(nav_mesh)
         self.state_action_pairs = state_action_pairs
-        self.self.joint_actions = self.joint_actions
         self.epsilon = epsilon
         self.initial_value = initial_value
 
+        # All regions
         self.regions = [((0,0),     (125,95)),
-                   ((126,0),   (180,95)),
-                   ((181,0),   (350,95)),
-                   ((351,0),   (460,95)),
-                   ((0,96),    (55,175)),
-                   ((56,96),   (125,175)),
-                   ((126,96),  (180,175)),
-                   ((181,96),  (285,175)),
-                   ((286,96),  (350,175)),
-                   ((351,96),  (410,175)),
-                   ((411,96),  (460,175)),
-                   ((0,176),   (125,265)),
-                   ((126,176), (285,265)),
-                   ((286,176), (350,265)),
-                   ((351,176), (460,265))
-                  ]
+                        ((126,0),   (180,95)),
+                        ((181,0),   (350,95)),
+                        ((351,0),   (460,95)),
+                        ((0,96),    (55,175)),
+                        ((56,96),   (125,175)),
+                        ((126,96),  (180,175)),
+                        ((181,96),  (285,175)),
+                        ((286,96),  (350,175)),
+                        ((351,96),  (410,175)),
+                        ((411,96),  (460,175)),
+                        ((0,176),   (125,265)),
+                        ((126,176), (285,265)),
+                        ((286,176), (350,265)),
+                        ((351,176), (460,265))
+                       ]
+
+        # Regions of interest
+        self.ROI = {"cp": (3, 13), "am": (7,9), "rest": (1,2,4,5,6,10,11,12,14,15)}
 
         # Switch the regions around when we start on the other side of the screen
         if self.team == TEAM_BLUE:
             self.regions.reverse()
-
-        self.ROI = {"cp": (3, 13), "am": (7,9), "rest": (1,2,4,5,6,10,11,12,14,15)}
 
         # Possible compass directions for the agents
         self.directions = ["N", "E", "S", "W"]
@@ -468,6 +447,10 @@ class JointObservation(object):
         # Keep track of the agents who have passed their observation in this timestep
         self.called_agents = set()
 
+        # Create a list of all possible joint actions
+        interestRegions = self.ROI["cp"] + self.ROI["am"]
+        self.joint_actions = list(product(interestRegions, repeat=len(self.friends)))
+
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
             information.
@@ -513,12 +496,12 @@ class JointObservation(object):
         if len(self.called_agents) == len(self.friends):
             state = self.process_joint_observation() # Process the joint observation
             key = state.toKey()
-            self.joint_action = chooseJointAction(key)
-            self.update_policy(key, joint_action) # Update policy when joint observation has been processed
+            self.joint_action = self.chooseJointAction(key)
+            self.update_policy(key, self.joint_action) # Update policy when joint observation has been processed
 
         
 
-    def chooseJointAction(key):
+    def chooseJointAction(self, key):
         action_value_dict = self.state_action_pairs[key]
         if randint(1,100) * 0.01 <= self.epsilon:
             joint_action = random.choice(self.joint_actions)
@@ -527,8 +510,8 @@ class JointObservation(object):
             joint_action = -1
             for action in self.joint_actions:
                 value = action_value_dict[action]
-                if value = {}:
-                    value = self.default_value
+                if value == {}:
+                    value = self.initial_value
                 if value > max_val:
                     max_val = value
                     joint_action = action
@@ -695,7 +678,7 @@ class State(object):
         self.ammo_timer = defaultdict(tuple)
         self.ammoRespawning = defaultdict(bool)
 
-    def toKey():
+    def toKey(self):
         key = str(self.locations) + str(self.orientations) + str(self.death_timers) + str(self.has_ammo) + str(self.final_stand) + str(self.control_points) + str(self.ammo_timer) + str(self.ammoRespawning)
         return key
 
@@ -851,10 +834,10 @@ def our_find_path(start, angle, end, mesh, grid, tilesize=16):
 
 
 class AutoVivification(dict):
-"""Implementation of perl's autovivification feature."""
-def __getitem__(self, item):
-    try:
-        return dict.__getitem__(self, item)
-    except KeyError:
-        value = self[item] = type(self)()
-        return value
+    """Implementation of perl's autovivification feature."""
+    def __getitem__(self, item):
+        try:
+            return dict.__getitem__(self, item)
+        except KeyError:
+            value = self[item] = type(self)()
+            return value
