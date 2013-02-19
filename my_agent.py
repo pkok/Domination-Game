@@ -517,6 +517,30 @@ class JointObservation(object):
                     joint_action = action
         return joint_action
 
+    def setReward(self):
+        """ Set the future reward.
+        """
+        reward = 0
+        state = self.process_joint_observation()
+        difference = self.score[0] - self.score[1]
+        """ Not used so far but maybe in the future.
+        lastDifference = observation.score[0] - observation.score[1]
+        """
+        if self.team == TEAM_RED:
+            if difference > 0:
+                reward = difference
+            else:
+                for userRegion in state.locations["regions"]:
+                    if userRegion == 3 or userRegion == 7 or userRegion == 9 or userRegion == 13:
+                        reward += 1
+        elif self.team == TEAM_BLUE:
+            if difference < 0:
+                reward = -difference
+            else:
+                for userRegion in state.locations["regions"]:
+                    if userRegion == 3 or userRegion == 7 or userRegion == 9 or userRegion == 13:
+                        reward += 1
+        return reward
 
     def update_policy(self, key, jointAction):
         """ Update the joint policy of the agents based on the current state.
