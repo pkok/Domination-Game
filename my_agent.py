@@ -559,15 +559,12 @@ class JointObservation(object):
             elif value <= 15:
                 return 4
         
-        
-        # TODO: compute state values based on joint observation
-        # TODO: Only ammo observation and ammo respawn left
         agent_regions = ()
         agent_directions = ()
         agent_timers = ()
         agent_ammo = ()
         # agent_id: (x, y, angle, ammo, collided, respawn_in, hit)
-        for key, val in self.friends.items():
+        for key, val in sorted(self.friends.iteritems()):
             agent_regions = agent_regions + (in_region(self, val.x, val.y),) #friends[0,1]
             agent_directions = agent_directions + (angle_to_wd(val.angle),) #friends[2]
             agent_timers = agent_timers + (timer_range(val.respawn_in),)
@@ -618,7 +615,7 @@ class JointObservation(object):
 
         # Make a list of the ammo spawn info. Reverse the items in this list if team == BLUE.
         ammoList = []
-        for key, value in self.objects.items():
+        for key, value in sorted(self.objects.iteritems()):
             ammoList.append((key,value))
         if self.team == TEAM_BLUE:
             ammoList.reverse()
