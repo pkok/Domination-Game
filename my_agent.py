@@ -1,6 +1,8 @@
 from collections import defaultdict, namedtuple
 from itertools import product
+from random import randint, choice
 import math
+import sys
 
 from domination.libs import astar
 astar = astar.astar
@@ -18,18 +20,19 @@ class Agent(object):
         self.id = id
         self.team = team
         self.settings = settings
-        self.joint_observation = JointObservation(settings, team, nav_mesh)
+        # self.state_action_pairs = defaultdict(lambda: [None, 10])
+        self.epsilon = 0.05
+        self.initial_value = 10
+        self.state_action_pairs = AutoVivification()
+        self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
+        self.joint_observation = JointObservation(settings, team, nav_mesh, self.state_action_pairs, self.joint_actions, self.epsilon, self.initial_value)
+        self.joint_action = (3,3,7) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh 
         self.grid = field_grid
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
-        self.joint_observation = JointObservation(settings, team)
-        self.state_action_pairs = defaultdict(lambda: [None, None, 10])
-        self.
 
-        # Fill the joint_actions object with all possible joint actions.
-        self.joint_actions = createJointActions(self.joint_observation)
 
         # Read the binary blob, we're not using it though
         if blob is not None:
@@ -83,7 +86,8 @@ class Agent(object):
         """ This function is called every step and should
             return a tuple in the form: (turn, speed, shoot)
         """ 
-        # Set the goal of the action
+        # TODO: Set the agent's goal to the given location in joint_observation
+        # agent_action = self.joint_observation.joint_action[]
         self.set_goal()
         
         # Compute and return the corresponding action
@@ -385,30 +389,16 @@ class JointObservation(object):
     """
     __metaclass__ = Singleton
 
-    def __init__(self, settings, team, nav_mesh):
-
-        # Regions are defined as ((topleft)(bottomright)). [((x1, y1), (x2, y2)), ...]
-        # cp = (((181,0),   (350,95)), ((126,176), (285,265)))
-        # am = (((126,96),  (180,175)), ((286,96),  (350,175)))
-        # rest = (((0,0),     (125,95)),
-        #         ((126,0),   (180,95)),
-        #         ((351,0),   (460,95)),
-        #         ((0,96),    (55,175)),
-        #         ((56,96),   (125,175)),
-        #         ((181,96),  (285,175)),
-        #         ((351,96),  (410,175)),
-        #         ((411,96),  (460,175)),
-        #         ((0,176),   (125,265)),
-        #         ((286,176), (350,265)),
-        #         ((351,176), (460,265))
-        #        )
-
+    def __init__(self, settings, team, nav_mesh, state_action_pairs, joint_actions, epsilon,  initial_value):
         
         self.team = team        
-
         # keeping it the same while I don't have a correct function. - P.
         self.mesh = transform_mesh(nav_mesh)
-        
+        self.state_action_pairs = state_action_pairs
+        self.self.joint_actions = self.joint_actions
+        self.epsilon = epsilon
+        self.initial_value = initial_value
+
         self.regions = [((0,0),     (125,95)),
                    ((126,0),   (180,95)),
                    ((181,0),   (350,95)),
@@ -521,9 +511,37 @@ class JointObservation(object):
 
         self.called_agents.add(agent_id)
         if len(self.called_agents) == len(self.friends):
-            state = self.process_joint_observation() # Process the joint observation 
-            self.update_policy() # Update policy when joint observation has been processed
+            state = self.process_joint_observation() # Process the joint observation
+            key = state.toKey()
+            self.joint_action = chooseJointAction(key)
+            self.update_policy(key, joint_action) # Update policy when joint observation has been processed
+
         
+
+    def chooseJointAction(key):
+        action_value_dict = self.state_action_pairs[key]
+        if randint(1,100) * 0.01 <= self.epsilon:
+            joint_action = random.choice(self.joint_actions)
+        else:
+            max_val = -1000
+            joint_action = -1
+            for action in self.joint_actions:
+                value = action_value_dict[action]
+                if value = {}:
+                    value = self.default_value
+                if value > max_val:
+                    max_val = value
+                    joint_action = action
+        return joint_action
+
+
+    def update_policy(self, key, jointAction):
+        """ Update the joint policy of the agents based on the current state.
+        """
+        pass
+        # self.state_action_pairs[state.toKey()][jointAction]
+
+
     def process_joint_observation(self):
         """ Creates an abstract representation of the observation, on which we will learn.
         """
@@ -641,10 +659,6 @@ class JointObservation(object):
         state.ammoRespawning["ammo"] = ammo_missing
         return state
 
-    def update_policy(self):
-        """ Update the joint policy of the agents based on the current state.
-        """
-
 
 
 
@@ -680,6 +694,10 @@ class State(object):
         self.control_points = defaultdict(bool)
         self.ammo_timer = defaultdict(tuple)
         self.ammoRespawning = defaultdict(bool)
+
+    def toKey():
+        key = str(self.locations) + str(self.orientations) + str(self.death_timers) + str(self.has_ammo) + str(self.final_stand) + str(self.control_points) + str(self.ammo_timer) + str(self.ammoRespawning)
+        return key
 
 
 
@@ -829,3 +847,14 @@ def our_find_path(start, angle, end, mesh, grid, tilesize=16):
     heuristic  = lambda n: ((n[0]-end[0]) ** 2 + (n[1]-end[1]) ** 2) ** 0.5
     nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
     return nodes
+
+
+
+class AutoVivification(dict):
+"""Implementation of perl's autovivification feature."""
+def __getitem__(self, item):
+    try:
+        return dict.__getitem__(self, item)
+    except KeyError:
+        value = self[item] = type(self)()
+        return value
