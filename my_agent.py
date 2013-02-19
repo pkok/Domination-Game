@@ -1,9 +1,12 @@
 from collections import defaultdict, namedtuple
 import math
 
+from domination.libs import astar
+astar = astar.astar
+
 class Agent(object):
     
-    NAME = "stuiterbal"
+    NAME = "vulpotlood"
     
     def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None, matchinfo=None, *args, **kwargs):
         """ Each agent is initialized at the beginning of each game.
@@ -41,7 +44,7 @@ class Agent(object):
             to determine your action. Note that the observation object
             is modified in place.
         """
-        self.observation = observation
+        self.obs = observation
         self.selected = observation.selected
         self.joint_observation.update(self.id, observation)
         
@@ -53,45 +56,45 @@ class Agent(object):
             return a tuple in the form: (turn, speed, shoot)
         """ 
         # Set the goal of the action
-        self.set_goal(self.observation)
+        self.set_goal()
         
         # Compute and return the corresponding action
-        return self.get_action(self.observation)
+        return self.get_action()
     
-    def set_goal(self, obs):
+    def set_goal(self):
         """This function sets the goal for the agent.
         """
         # Check if agent reached goal.
-        if self.goal is not None and point_dist(self.goal, obs.loc) < self.settings.tilesize:
+        if self.goal is not None and point_dist(self.goal, self.obs.loc) < self.settings.tilesize:
             self.goal = None
             
         # Walk to ammo
-        ammopacks = filter(lambda x: x[2] == "Ammo", obs.objects)
+        ammopacks = filter(lambda x: x[2] == "Ammo", self.obs.objects)
         if ammopacks:
             self.goal = ammopacks[0][0:2]
             
         # Drive to where the user clicked
         # Clicked is a list of tuples of (x, y, shift_down, is_selected)
-        if self.selected and self.observation.clicked:
-            self.goal = self.observation.clicked[0][0:2]
+        if self.selected and self.obs.clicked:
+            self.goal = self.obs.clicked[0][0:2]
         
         # Walk to random CP
         if self.goal is None:
-            self.goal = obs.cps[random.randint(0,len(obs.cps)-1)][0:2]
+            self.goal = self.obs.cps[random.randint(0,len(self.obs.cps)-1)][0:2]
     
-    def get_action(self, obs):
+    def get_action(self):
         """This function returns the action tuple for the agent.
         """
         # Compute path and angle to path
-        path = find_path(obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
+        path = find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.tilesize)
         if path:
-            dx = path[0][0] - obs.loc[0]
-            dy = path[0][1] - obs.loc[1]
-            path_angle = angle_fix(math.atan2(dy, dx) - obs.angle)
+            dx = path[0][0] - self.obs.loc[0]
+            dy = path[0][1] - self.obs.loc[1]
+            path_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
             path_dist = (dx**2 + dy**2)**0.5
 
             # Compute shoot and turn
-            shoot, turn = self.compute_shoot(obs, path_angle)
+            shoot, turn = self.compute_shoot(path_angle)
             # Compute speed
             speed = self.compute_speed(turn, path_dist)
 
@@ -103,21 +106,21 @@ class Agent(object):
         
         return (turn,speed,shoot)
     
-    def compute_shoot(self, obs, path_angle):
+    def compute_shoot(self, path_angle):
         """This function returns shoot and turn actions for the agent
         """
         shoot = False
         turn = path_angle
         
         # Check for ammo and nearby enemies
-        if obs.ammo > 0 and obs.foes:
+        if self.obs.ammo > 0 and self.obs.foes:
             # Calculate which foes are roughly within a possible angle or distance to shoot
             approx_shootable = []
-            for foe in obs.foes:
+            for foe in self.obs.foes:
                 # Calculate angle and distance to center of foe
-                dx = foe[0] - obs.loc[0]
-                dy = foe[1] - obs.loc[1]
-                cen_angle = angle_fix(math.atan2(dy, dx) - obs.angle)
+                dx = foe[0] - self.obs.loc[0]
+                dy = foe[1] - self.obs.loc[1]
+                cen_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
                 cen_dist = (dx**2 + dy**2)**0.5
                 
                 if (math.fabs(cen_angle) <= (self.settings.max_turn + pi/6) and 
@@ -138,8 +141,8 @@ class Agent(object):
  
                 # Calculate angles and coords of foe's edges
                 cen_angle = foe[2]
-                left_angle = angle_fix(math.atan2(dy-dy_edge, dx-dx_edge) - obs.angle)
-                right_angle = angle_fix(math.atan2(dy+dy_edge, dx+dx_edge) - obs.angle)
+                left_angle = angle_fix(math.atan2(dy-dy_edge, dx-dx_edge) - self.obs.angle)
+                right_angle = angle_fix(math.atan2(dy+dy_edge, dx+dx_edge) - self.obs.angle)
                 left_coords = (foe[0]-dx_edge,foe[1]-dy_edge)
                 right_coords = (foe[0]+dx_edge,foe[1]+dy_edge)
                 edge_dist = ((dx+dx_edge)**2 + (dy+dy_edge)**2)**0.5
@@ -150,11 +153,11 @@ class Agent(object):
                 if not self.angle_possible(cen_angle):
                     cen_hit = False
                 # Check for walls
-                if cen_hit and line_intersects_grid(obs.loc, foe[0:2], self.grid, self.settings.tilesize):
+                if cen_hit and line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
                     cen_hit = False
                 # Check for friendly fire
-                for friendly in obs.friends:
-                    if cen_hit and line_intersects_circ(obs.loc, foe[0:2], friendly, 6):
+                for friendly in self.obs.friends:
+                    if cen_hit and line_intersects_circ(self.obs.loc, foe[0:2], friendly, 6):
                         cen_hit = False
                 
                 # Check if left edge can be hit
@@ -166,11 +169,11 @@ class Agent(object):
                 if not self.angle_possible(left_angle):
                     left_hit = False
                 # Check for walls
-                if left_hit and line_intersects_grid(obs.loc, left_coords, self.grid, self.settings.tilesize):
+                if left_hit and line_intersects_grid(self.obs.loc, left_coords, self.grid, self.settings.tilesize):
                     left_hit = False
                 # Check for friendly fire
-                for friendly in obs.friends:
-                    if left_hit and line_intersects_circ(obs.loc, left_coords, friendly, 6):
+                for friendly in self.obs.friends:
+                    if left_hit and line_intersects_circ(self.obs.loc, left_coords, friendly, 6):
                         left_hit = False
 
                 # Check if right edge can be hit
@@ -182,11 +185,11 @@ class Agent(object):
                 if not self.angle_possible(right_angle):
                     right_hit = False
                 # Check for walls
-                if line_intersects_grid(obs.loc, right_coords, self.grid, self.settings.tilesize):
+                if line_intersects_grid(self.obs.loc, right_coords, self.grid, self.settings.tilesize):
                     right_hit = False
                 # Check for friendly fire
-                for friendly in obs.friends:
-                    if left_hit and line_intersects_circ(obs.loc, right_coords, friendly, 6):
+                for friendly in self.obs.friends:
+                    if left_hit and line_intersects_circ(self.obs.loc, right_coords, friendly, 6):
                         right_hit = False
 
                 # Check optimal angle to shoot foe depending on which parts can be hit
@@ -292,14 +295,14 @@ class Agent(object):
 
         """
         # Draw the agent field of vision and max shooting range
-        fov_rect = pygame.Rect(self.observation.loc[0] - (self.settings.max_see),
-                                self.observation.loc[1] - (self.settings.max_see),
+        fov_rect = pygame.Rect(self.obs.loc[0] - (self.settings.max_see),
+                                self.obs.loc[1] - (self.settings.max_see),
                                 2 * self.settings.max_see,
                                 2 * self.settings.max_see)
                                
         pygame.draw.rect(surface, (0,0,255), fov_rect, 1)
         
-        pygame.draw.circle(surface, (255,0,0,90), self.observation.loc, self.settings.max_range) 
+        pygame.draw.circle(surface, (255,0,0,90), self.obs.loc, self.settings.max_range) 
 
         """
 
@@ -308,15 +311,15 @@ class Agent(object):
         if self.selected:
             # Draw line directly to goal
             """if self.goal is not None:
-                pygame.draw.line(surface,(0,0,0),self.observation.loc, self.goal)
+                pygame.draw.line(surface,(0,0,0),self.obs.loc, self.goal)
             """
             # Draw line to goal along the planned path
             if self.goal is not None:
-                path = find_path(self.observation.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
+                path = find_path(self.obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
                 if path:
                     for i in range(len(path)):
                         if i == 0:
-                            pygame.draw.line(surface,(0,0,0),self.observation.loc, path[i])
+                            pygame.draw.line(surface,(0,0,0),self.obs.loc, path[i])
                         else:
                             pygame.draw.line(surface,(0,0,0),path[i-1], path[i])
         
@@ -375,20 +378,8 @@ class JointObservation(object):
         
         self.team = team        
 
-        def mesh_steps(start, end, weight):
-            """ Compute a new weight for a nav_mesh's edge, based on travel time.
-            This should allow A* to think in terms of minimizing the number of actions
-            needed to reach the target. However, it is not finished yet, and it
-            doesn't work as nice as I hoped :(
-                - Patrick
-            """
-            move_count = math.ceil(weight / settings.max_speed)
-            return move_count
-
         # keeping it the same while I don't have a correct function. - P.
-        #self.mesh = transform_mesh(nav_mesh, lambda start, end, weight: weight) 
-        self.mesh = transform_mesh(nav_mesh, mesh_steps)
-        print self.mesh
+        self.mesh = transform_mesh(nav_mesh)
         
         self.regions = [((0,0),     (125,95)),
                    ((126,0),   (180,95)),
@@ -735,16 +726,47 @@ class Strategies(object):
         pass
 
 
-def transform_mesh(nav_mesh, mesh_transform):
+def transform_mesh(nav_mesh):
     """ Recomputes a new weight for each edge of the navigation mesh.
         
         Each start and end point of an edge and its weight is given to
         mesh_transform, and its return value is stored in a new mesh.
     """
     new_mesh = dict()
-    for start in nav_mesh.keys():
-        if start not in new_mesh:
-            new_mesh[start] = dict()
-        for end in nav_mesh[start].keys():
-            new_mesh[start][end] = mesh_transform(start, end, nav_mesh[start][end])
+    for arrived_from in nav_mesh:
+        for start in nav_mesh[arrived_from]:
+            if start not in new_mesh:
+                new_mesh[start] = dict()
+            for end in nav_mesh[start]:
+                new_mesh[start[0], start[1], angle][end] = nav_mesh[start][end]
     return new_mesh
+
+
+def find_path(start, angle, end, mesh, grid, tilesize=16):
+    """ Uses astar to find a path from start to end,
+        using the given mesh and tile grid.
+        
+        >>> grid = [[0,0,0,0,0],[0,0,0,0,0],[0,0,1,0,0],[0,0,0,0,0],[0,0,0,0,0]]
+        >>> mesh = make_nav_mesh([(2,2,1,1)],(0,0,4,4),1)
+        >>> find_path((0,0),(4,4),mesh,grid,1)
+        [(4, 1), (4, 4)]
+    """
+    # If there is a straight line, just return the end point
+    if not line_intersects_grid(start, end, grid, tilesize):
+        return [end]
+    # Copy mesh so we can add temp nodes
+    mesh = copy.deepcopy(mesh)
+    # Add temp notes for start
+    mesh[start] = dict([(n, point_dist(start,n)) for n in mesh if not line_intersects_grid(start,n,grid,tilesize)])
+    # Add temp nodes for end:
+    if end not in mesh:
+        endconns = [(n, point_dist(end,n)) for n in mesh if not line_intersects_grid(end,n,grid,tilesize)]
+        for n, dst in endconns:
+            mesh[n][end] = dst
+    
+    neighbours = lambda n: mesh[n].keys()
+    cost       = lambda n1, n2: mesh[n1][n2]
+    goal       = lambda n: n == end
+    heuristic  = lambda n: ((n[0]-end[0]) ** 2 + (n[1]-end[1]) ** 2) ** 0.5
+    nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
+    return nodes
