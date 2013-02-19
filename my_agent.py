@@ -552,10 +552,7 @@ class JointObservation(object):
         state.orientations["direction"] = agent_directions 
         state.death_timers["timer"] = agent_timers #friends[5]
         state.has_ammo["ammo"] = agent_ammo #friends[3]
-        
-        # hmmm..... hard to decide
-        state.final_stand = False
-        
+
         # (x, y): (dominating_team, last_seen)
         # (cp_top =  216, 56)
         # (cp_bottom =  248, 216)
@@ -578,6 +575,14 @@ class JointObservation(object):
             cp_state = (cp_top_state, cp_bottom_state)
         
         state.control_points["cp"] = cp_state
+        
+        if cp_state == (False, False):
+            if self.settings.max_steps - self.step <= 20 and self.score[0] < 50:
+                state.final_stand = True
+            elif self.score[0] < 20:
+                state.final_stand = True
+        else:
+            state.final_stand = False
         
         # (x, y, type): last_seen, disappeared_since
         # if unknown estimate 0.5 times max_timer
