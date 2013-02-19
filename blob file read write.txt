@@ -1,0 +1,5 @@
+pickle.loads(blob.read())
+only use .read on a file once (so )
+
+wrap in try except class!
+pickle.dump(self.blobcontent, blobfile, pickle.HIGHEST....)

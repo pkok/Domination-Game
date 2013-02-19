@@ -1,4 +1,5 @@
 from collections import defaultdict, namedtuple
+from itertools import product
 import math
 
 from domination.libs import astar
@@ -23,20 +24,47 @@ class Agent(object):
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
-        self.state_strategy_pairs = defaultdict(lambda: [None, None, 0])
+        self.joint_observation = JointObservation(settings, team)
+        self.state_action_pairs = defaultdict(lambda: [None, None, 10])
+        self.
+
+        # Fill the joint_actions object with all possible joint actions.
+        self.joint_actions = createJointActions(self.joint_observation)
 
         # Read the binary blob, we're not using it though
         if blob is not None:
             print "Agent %s received binary blob of %s" % (
                self.callsign, type(pickle.loads(blob.read())))
             # Reset the file so other agents can read it.
-            blob.seek(0) 
-        
+            blob.seek(0)
+
         # Recommended way to share variables between agents.
         if id == 0:
             self.all_agents = self.__class__.all_agents = []
         self.all_agents.append(self)
     
+    def createJointActions(self, joint_observation):
+        joint_actions = []
+
+		N = len(joint_observation.friends)
+        cp = joint_observation.ROI["cp"]
+        am = joint_observation.ROI["am"]
+		interestRegions = cp + am
+		"""
+        N = len(joint_observation.friends)
+        cp = joint_observation.ROI["cp"]
+        am = joint_observation.ROI["am"]
+
+        two_third = math.ceil((2./3.)*N)
+        one_third = math.floor((1./3.)*N)
+
+        # Strats contains a list of tuples dividing the agents between (1) control points and (2) ammo points.
+        strats = [(N, 0), (two_third, one_third), (one_third, two_third), (0, N)]
+		"""
+		joint_actions = product(interestRegions,repeat=N)
+
+        return joint_actions
+
     def observe(self, observation):
         """ Each agent is passed an observation using this function,
             before being asked for an action. You can store either
@@ -398,6 +426,10 @@ class JointObservation(object):
                    ((351,176), (460,265))
                   ]
 
+        # Switch the regions around when we start on the other side of the screen
+        if self.team == TEAM_BLUE:
+            self.regions.reverse()
+
         self.ROI = {"cp": (3, 13), "am": (7,9), "rest": (1,2,4,5,6,10,11,12,14,15)}
 
         # Possible compass directions for the agents
@@ -563,8 +595,11 @@ class JointObservation(object):
             cp_state = (False, False) if self.team == TEAM_BLUE else (True, True)
         # case in which score gives info about last seen
         else:
-            cp_state = (cp_top_state, cp_bottom_state)
-        
+            if self.team == TEAM_RED:
+                cp_state = (cp_top_state, cp_bottom_state)
+            else:
+                cp_state = (cp_bottom_state, cp_top_state)
+
         state.control_points["cp"] = cp_state
         
         if cp_state == (False, False):
@@ -579,7 +614,15 @@ class JointObservation(object):
         # if unknown estimate 0.5 times max_timer
         ammo_missing = ()
         ammo_spawn_range = ()
+
+        # Make a list of the ammo spawn info. Reverse the items in this list if team == BLUE.
+        ammoList = []
         for key, value in self.objects.items():
+            ammoList.append((key,value))
+        if self.team == TEAM_BLUE:
+            ammoList.reverse()
+
+        for key, value in ammoList:
             if key[2] == "Ammo": 
                 ammo_spawns_in = timer_range((value[1] + value[0] +1)/2 + self.settings.ammo_rate - self.step)
                 #ammo was last seen
@@ -601,6 +644,8 @@ class JointObservation(object):
     def update_policy(self):
         """ Update the joint policy of the agents based on the current state.
         """
+
+
 
 
 
@@ -639,22 +684,18 @@ class State(object):
 
 
 ########################################################################
-##### Strategy class ###################################################
+##### JointAction class ################################################
 ########################################################################
-class Strategies(object):
+class JoinAction(object):
 
     # Our strategies define the % of bots that go for certain goals.
 
     # strategies =  "Name"      :  % CP     , % AM
-    N = 3 #len(self.friends)
-    two_third = math.ceil((2./3.)*N)
-    one_third = math.floor((1./3.)*N)
-    high_level_strats   =  {"Full_offense"   : (N, 0),
-                            "Normal_offense" : (two_third, one_third),
-                            "Ammo"           : (one_third, two_third),
-                            "Full_ammo"      : (0, N)
-                           }
 
+
+
+    
+    '''
     low_level_strats_full_offense =  {"fo01"	: ("Agent1","cp1","Agent2","cp1","Agent3","cp1"),
 									  "fo02"	: ("Agent1","cp1","Agent2","cp1","Agent3","cp2"),
 									  "fo03"	: ("Agent1","cp1","Agent2","cp2","Agent3","cp1"),
@@ -726,6 +767,7 @@ class Strategies(object):
 								   "fa07"	: ("Agent1","am2","Agent2","am2","Agent3","am1"),
 								   "fa08"	: ("Agent1","am2","Agent2","am2","Agent3","am2")
 								  }
+    '''
 							 
     def __init__(self):
         pass
