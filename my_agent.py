@@ -25,7 +25,8 @@ class Agent(object):
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
         self.joint_observation = JointObservation(settings, team)
-        self.state_action_pairs = defaultdict(lambda: [None, None, 0])
+        self.state_action_pairs = defaultdict(lambda: [None, None, 10])
+        self.
 
         # Fill the joint_actions object with all possible joint actions.
         self.joint_actions = createJointActions(self.joint_observation)
@@ -425,6 +426,10 @@ class JointObservation(object):
                    ((351,176), (460,265))
                   ]
 
+        # Switch the regions around when we start on the other side of the screen
+        if self.team == TEAM_BLUE:
+            self.regions.reverse()
+
         self.ROI = {"cp": (3, 13), "am": (7,9), "rest": (1,2,4,5,6,10,11,12,14,15)}
 
         # Possible compass directions for the agents
@@ -590,8 +595,11 @@ class JointObservation(object):
             cp_state = (False, False) if self.team == TEAM_BLUE else (True, True)
         # case in which score gives info about last seen
         else:
-            cp_state = (cp_top_state, cp_bottom_state)
-        
+            if self.team == TEAM_RED:
+                cp_state = (cp_top_state, cp_bottom_state)
+            else:
+                cp_state = (cp_bottom_state, cp_top_state)
+
         state.control_points["cp"] = cp_state
         
         if cp_state == (False, False):
@@ -606,7 +614,15 @@ class JointObservation(object):
         # if unknown estimate 0.5 times max_timer
         ammo_missing = ()
         ammo_spawn_range = ()
+
+        # Make a list of the ammo spawn info. Reverse the items in this list if team == BLUE.
+        ammoList = []
         for key, value in self.objects.items():
+            ammoList.append((key,value))
+        if self.team == TEAM_BLUE:
+            ammoList.reverse()
+
+        for key, value in ammoList:
             if key[2] == "Ammo": 
                 ammo_spawns_in = timer_range((value[1] + value[0] +1)/2 + self.settings.ammo_rate - self.step)
                 #ammo was last seen
@@ -628,6 +644,8 @@ class JointObservation(object):
     def update_policy(self):
         """ Update the joint policy of the agents based on the current state.
         """
+
+
 
 
 
