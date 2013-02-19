@@ -1,4 +1,5 @@
 from collections import defaultdict, namedtuple
+from itertools import product
 import math
 
 from domination.libs import astar
@@ -43,6 +44,12 @@ class Agent(object):
     
     def createJointActions(self, joint_observation):
         joint_actions = []
+
+		N = len(joint_observation.friends)
+        cp = joint_observation.ROI["cp"]
+        am = joint_observation.ROI["am"]
+		interestRegions = cp + am
+		"""
         N = len(joint_observation.friends)
         cp = joint_observation.ROI["cp"]
         am = joint_observation.ROI["am"]
@@ -52,6 +59,8 @@ class Agent(object):
 
         # Strats contains a list of tuples dividing the agents between (1) control points and (2) ammo points.
         strats = [(N, 0), (two_third, one_third), (one_third, two_third), (0, N)]
+		"""
+		joint_actions = product(interestRegions,repeat=N)
 
         return joint_actions
 
