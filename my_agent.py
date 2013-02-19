@@ -86,7 +86,7 @@ class Agent(object):
         """This function returns the action tuple for the agent.
         """
         # Compute path and angle to path
-        path = find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.tilesize)
+        path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.tilesize)
         if path:
             dx = path[0][0] - self.obs.loc[0]
             dy = path[0][1] - self.obs.loc[1]
@@ -315,7 +315,7 @@ class Agent(object):
             """
             # Draw line to goal along the planned path
             if self.goal is not None:
-                path = find_path(self.obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
+                path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.tilesize)
                 if path:
                     for i in range(len(path)):
                         if i == 0:
@@ -731,29 +731,41 @@ class Strategies(object):
         pass
 
 
-def transform_mesh(nav_mesh):
+def angle_distance(angle1, angle2, max_angle=math.pi/4):
+    anglediff = abs(angle1 - angle2)
+    return min(2*pi - anglediff, anglediff) / max_angle
+
+
+def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
     """ Recomputes a new weight for each edge of the navigation mesh.
         
         Each start and end point of an edge and its weight is given to
         mesh_transform, and its return value is stored in a new mesh.
     """
+    return nav_mesh # Remove this line to activate the step-based mesh.
     new_mesh = dict()
-    for arrived_from in nav_mesh:
-        for start in nav_mesh[arrived_from]:
-            if start not in new_mesh:
-                new_mesh[start] = dict()
-            for end in nav_mesh[start]:
-                new_mesh[start[0], start[1], angle][end] = nav_mesh[start][end]
+    angles = list(frange(0, 2*math.pi, max_angle))
+    for start in nav_mesh:
+        for angle in angles:
+            start_ = start + (angle,)
+            new_mesh[start_] = dict()
+            for angle_ in angles:
+                new_mesh[start_][start + (angle_,)] = angle_distance(angle, angle_, max_angle)
+                for end in nav_mesh[start]:
+                    new_mesh[start_][end + (angle_,)] = (
+                            math.ceil(nav_mesh[start][end] / max_speed) +
+                            angle_distance(angle, angle_, max_angle) +
+                            -1)
     return new_mesh
 
 
-def find_path(start, angle, end, mesh, grid, tilesize=16):
+def our_find_path(start, angle, end, mesh, grid, tilesize=16):
     """ Uses astar to find a path from start to end,
         using the given mesh and tile grid.
         
         >>> grid = [[0,0,0,0,0],[0,0,0,0,0],[0,0,1,0,0],[0,0,0,0,0],[0,0,0,0,0]]
         >>> mesh = make_nav_mesh([(2,2,1,1)],(0,0,4,4),1)
-        >>> find_path((0,0),(4,4),mesh,grid,1)
+        >>> our_find_path((0,0),0,(4,4),mesh,grid,1)
         [(4, 1), (4, 4)]
     """
     # If there is a straight line, just return the end point
