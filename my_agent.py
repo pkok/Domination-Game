@@ -9,7 +9,7 @@ astar = astar.astar
 
 class Agent(object):
     
-    NAME = "vulpotlood"
+    NAME = "colaflesje"
     
     def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None, matchinfo=None, *args, **kwargs):
         """ Each agent is initialized at the beginning of each game.
@@ -17,6 +17,7 @@ class Agent(object):
             Note that the properties pertaining to the game field might not be
             given for each game.
         """
+        
         self.id = id
         self.team = team
         self.settings = settings
@@ -27,7 +28,7 @@ class Agent(object):
         # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
         self.joint_observation = JointObservation(settings, team, nav_mesh, self.state_action_pairs, self.epsilon, self.initial_value)
         self.joint_action = (3,3,7) #random.choice(joint_actions) # Initial random joint action for step 1.
-        self.mesh = self.joint_observation.mesh 
+        self.mesh = self.joint_observation.mesh
         self.grid = field_grid
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
@@ -77,20 +78,84 @@ class Agent(object):
         # Check if agent reached goal.
         if self.goal is not None and point_dist(self.goal, self.obs.loc) < self.settings.tilesize:
             self.goal = None
-            
-        # Walk to ammo
+        
+        # Walk to ammo if it is closer than current goal
         ammopacks = filter(lambda x: x[2] == "Ammo", self.obs.objects)
         if ammopacks:
-            self.goal = ammopacks[0][0:2]
+            if self.goal is None:
+                self.goal = ammopacks[0][0:2]
+            else:
+                goal_path = our_find_path(self.obs.loc, self.obs.angle, self.goal,
+                                    self.mesh, self.grid, self.settings.tilesize)
+                ammo_path = our_find_path(self.obs.loc, self.obs.angle, ammopacks[0][0:2],
+                                    self.mesh, self.grid, self.settings.tilesize)
+                if self.calc_path_length(ammo_path) < self.calc_path_length(goal_path):
+                    self.goal = ammopacks[0][0:2]
+
+        # If no current goal, follow some policy        
+        if self.goal is None:
+
+            # Initialise some handy parameters
+            cp1 = False
+            cp2 = False
+            if self.team == TEAM_RED:
+                if self.obs.cps[0][2] == 0:
+                    cp1 = True
+                if self.obs.cps[1][2] == 0:
+                    cp2 = True
+            elif self.team == TEAM_BLUE:
+                if self.obs.cps[0][2] == 1:
+                    cp1 = True
+                if self.obs.cps[1][2] == 1:
+                    cp2 = True
+
+            ammo_positions = [(152,136), (312,136)]
             
+            at_cp1 = (point_dist(self.obs.cps[0][0:2], self.obs.loc) < self.settings.tilesize)
+            at_cp2 = (point_dist(self.obs.cps[1][0:2], self.obs.loc) < self.settings.tilesize)
+            at_ammo1 = (point_dist(ammo_positions[0], self.obs.loc) < self.settings.tilesize)
+            at_ammo2 = (point_dist(ammo_positions[0], self.obs.loc) < self.settings.tilesize)
+            
+            # If no control points are controlled, walk to a random control point
+            if not cp1 and not cp2:
+                self.goal = self.obs.cps[random.randint(0,len(self.obs.cps)-1)][0:2]
+            
+            # If both control points are occupied and agent has no ammo, walk to a random ammo spawn
+            elif cp1 and cp2 and self.obs.ammo == 0:
+                self.goal = ammo_positions[random.randint(0,len(ammo_positions)-1)]
+                
+            # If agent is at a control point, walk to a random ammo spawn
+            elif (at_cp1 or at_cp2):
+                self.goal = ammo_positions[random.randint(0,len(ammo_positions)-1)]
+            
+            # If agent is at an ammo spawn, walk to a random uncontrolled control point
+            elif at_ammo1 or at_ammo2:
+                self.goal = self.obs.cps[1][0:2] if cp1 else self.obs.cps[0][0:2]
+            
+            # If one control point is occupied, walk to the other
+            elif cp1 and not cp2:
+                self.goal = self.obs.cps[1][0:2]
+            elif cp2 and not cp1:
+                self.goal = self.obs.cps[0][0:2]
+                
+            # If nothing applies, walk to a random control point
+            else:
+                self.goal = self.obs.cps[random.randint(0,len(self.obs.cps)-1)][0:2]
+                    
         # Drive to where the user clicked
         # Clicked is a list of tuples of (x, y, shift_down, is_selected)
         if self.selected and self.obs.clicked:
             self.goal = self.obs.clicked[0][0:2]
-        
-        # Walk to random CP
-        if self.goal is None:
-            self.goal = self.obs.cps[random.randint(0,len(self.obs.cps)-1)][0:2]
+    
+    def calc_path_length(self, path):
+        """This function calculates the length of a path in pixels
+        """
+        path_length = 0.0
+        for i in range(len(path)-1):
+            dx = path[i+1][0] - path[i][0]
+            dy = path[i+1][1] - path[i][0]
+            path_length += (dx**2 + dy**2)**0.5
+        return path_length
     
     def get_action(self):
         """This function returns the action tuple for the agent.
@@ -269,7 +334,6 @@ class Agent(object):
     def compute_speed(self, turn, distance):
         # Compute speed based on angle with planned path and planned distance
         maxangle = (math.pi/2)+self.settings.max_turn
-        
         
         #If agent cannot reduce angle to below 90 degrees by turning, set speed to zero
         if turn >= maxangle or turn <= -maxangle:
