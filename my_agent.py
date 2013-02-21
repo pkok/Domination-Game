@@ -34,13 +34,16 @@ class Agent(object):
         self.selected = False
 
         # Read the binary blob, we're not using it though
-        if blob is not None:
+        if not self.joint_observation.state_action_pairs  and blob is not None:
+            # Remember the blob path so we can write back to it
+            self.blobpath = blob.name
+            self.joint_observation.state_action_pairs = pickle.loads(blob.read())
             print "Agent %s received binary blob of %s" % (
-               self.callsign, type(pickle.loads(blob.read())))
-            # Reset the file so other agents can read it.
-            blob.seek(0)
+               self.callsign, type(self.blobcontent))
+            # Reset the file so other agents can read it too.
+            blob.seek(0) 
 
-            # if state_action_pairs is not {}
+            # if state_action_pairs is not {} then update to data read from blob
 
         # Recommended way to share variables between agents.
         if id == 0:
@@ -404,7 +407,17 @@ class Agent(object):
             interrupt (CTRL+C) by the user. Use it to
             store any learned variables and write logs/reports.
         """
-        pass
+        if self.id == 0 and self.blobpath is not None:
+            try:
+                # We simply write the same content back into the blob.
+                # in a real situation, the new blob would include updates to 
+                # your learned data.
+                blobfile = open(self.blobpath, 'wb')
+                pickle.dump(self.joint_observation.state_action_pairs, blobfile, pickle.HIGHEST_PROTOCOL)
+            except:
+                # We can't write to the blob, this is normal on AppEngine since
+                # we don't have filesystem access there.        
+                print "Agent %s can't write blob." % self.callsign
 
 class Singleton(type):
     """ Metaclass so only a single object from a class can be created.
@@ -461,15 +474,17 @@ class JointObservation(object):
 
         # Regions of interest
         self.ROI = {"cp": (2, 12), "am": (6,8), "rest": (0,1,3,4,5,9,10,11,13,14)}
-
-        # Actual coordinates for each region. 
-        self.coords = {"2": (216, 56), "6":  (1,1), "8": (2,2), "12": (248, 216)}
-        # TODO: hier nog coordinaten van ammo spots in dict zetten!
-
-
+        
+        # coordinate list [2, 6, 8, 12]
+        self.coordlist = [(216, 56), (152, 136), (312, 136), (248, 216)]
+        
         # Switch the regions around when we start on the other side of the screen
         if self.team == TEAM_BLUE:
             self.regions.reverse()
+            self.coordlist.reverse()
+        
+        # Actual coordinates for each region. 
+        self.coords = {"2": coordlist[0], "6": coordlist[1], "8": coordlist[2], "12": coordlist[3]}
 
         # Possible compass directions for the agents
         self.directions = ["N", "E", "S", "W"]
@@ -715,6 +730,7 @@ class JointObservation(object):
             ammoList.reverse()
 
         for key, value in ammoList:
+            print("%d, %d, %s", key[0], key[1], key[2])
             if key[2] == "Ammo": 
                 ammo_spawns_in = timer_range((value[1] + value[0] +1)/2 + self.settings.ammo_rate - self.step)
                 #ammo was last seen
