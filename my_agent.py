@@ -24,9 +24,8 @@ class Agent(object):
         # self.state_action_pairs = defaultdict(lambda: [None, 10])
         self.epsilon = 0.05
         self.initial_value = 10
-        self.state_action_pairs = AutoVivification()
         # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
-        self.joint_observation = JointObservation(settings, team, nav_mesh, self.state_action_pairs, self.epsilon, self.initial_value)
+        self.joint_observation = JointObservation(settings, team, nav_mesh, self.epsilon, self.initial_value)
         self.joint_action = (3,3,7) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
@@ -40,6 +39,8 @@ class Agent(object):
                self.callsign, type(pickle.loads(blob.read())))
             # Reset the file so other agents can read it.
             blob.seek(0)
+
+            # if state_action_pairs is not {}
 
         # Recommended way to share variables between agents.
         if id == 0:
@@ -431,12 +432,12 @@ class JointObservation(object):
     """
     __metaclass__ = Singleton
 
-    def __init__(self, settings, team, nav_mesh, state_action_pairs, epsilon, initial_value):
+    def __init__(self, settings, team, nav_mesh, epsilon, initial_value):
         
+        self.state_action_pairs = AutoVivification()
         self.team = team        
         # keeping it the same while I don't have a correct function. - P.
         self.mesh = transform_mesh(nav_mesh)
-        self.state_action_pairs = state_action_pairs
         self.epsilon = epsilon
         self.initial_value = initial_value
 
@@ -459,7 +460,12 @@ class JointObservation(object):
                        ]
 
         # Regions of interest
-        self.ROI = {"cp": (3, 13), "am": (7,9), "rest": (1,2,4,5,6,10,11,12,14,15)}
+        self.ROI = {"cp": (2, 12), "am": (6,8), "rest": (0,1,3,4,5,9,10,11,13,14)}
+
+        # Actual coordinates for each region. 
+        self.coords = {"2": (216, 56), "6":  (1,1), "8": (2,2), "12": (248, 216)}
+        # TODO: hier nog coordinaten van ammo spots in dict zetten!
+
 
         # Switch the regions around when we start on the other side of the screen
         if self.team == TEAM_BLUE:
