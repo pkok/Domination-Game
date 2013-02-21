@@ -379,8 +379,8 @@ class Agent(object):
         pygame.draw.rect(surface, (0,0,255), fov_rect, 1)
         
         pygame.draw.circle(surface, (255,0,0,90), self.obs.loc, self.settings.max_range) 
-
-        """
+"""
+       
 
         
         # Selected agents draw their info
@@ -395,10 +395,10 @@ class Agent(object):
                 if path:
                     for i in range(len(path)):
                         if i == 0:
-                            pygame.draw.line(surface,(0,0,0),self.obs.loc, path[i])
+                            pygame.draw.line(surface,(0,0,0),self.obs.loc, path[i][0:2])
                         else:
-                            pygame.draw.line(surface,(0,0,0),path[i-1], path[i])
-        
+                            pygame.draw.line(surface,(0,0,0),path[i-1][0:2], path[i][0:2])
+    
     def finalize(self, interrupted=False):
         """ This function is called after the game ends, 
             either due to time/score limits, or due to an
@@ -860,10 +860,6 @@ class JoinAction(object):
     def __init__(self):
         pass
 
-
-
-
-
 def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
     """ Recomputes a new weight for each edge of the navigation mesh.
         
@@ -878,7 +874,7 @@ def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
             start_ = start + (angle,)
             new_mesh[start_] = dict()
             for angle_ in angles:
-                new_mesh[start_][start+(angle_,)] = math.ceil(math.fabs(angle_fix(angle_-angle))/max_angle)
+                #new_mesh[start_][start+(angle_,)] = math.ceil(math.fabs(angle_fix(angle_-angle))/max_angle)
                 for end in nav_mesh[start]:
                     new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)
     return new_mesh
@@ -894,12 +890,12 @@ def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
             return math.ceil(math.fabs(angle_fix(node2[2] - node1[2])) / max_angle)
     
     # Calculate the distance between the two nodes
-    dx = node1[0] - node2[0]
-    dy = node1[1] - node2[1]
+    dx = node2[0] - node1[0]
+    dy = node2[1] - node1[1]
     dist = math.ceil((dx**2 + dy**2)**0.5 / max_speed)
 
     # Calculate the angle required to face the direction of node2
-    angle_dist1 = math.ceil(math.fabs(angle_fix(math.atan2(dy, dx) - node1[2])) / max_angle)
+    angle_dist1 = math.ceil(math.fabs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle)
 
     # Calculate the angle required to face the direction specified by node2 after arriving
     if len(node2) == 2:
@@ -926,15 +922,15 @@ def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi
     if not line_intersects_grid(start, end, grid, tilesize):
         return [end]
     
-    # Add temp nodes for start
-    mesh[start] = dict([(n, calc_cost(start+(angle,),n,max_speed,max_angle)) for n in mesh 
-                        if not line_intersects_grid(start,n[0:2],grid,tilesize)])
     # Add temp nodes for end:
     endconns = [(n, calc_cost(n,end,max_speed,max_angle)) for n in mesh 
                 if not line_intersects_grid(end,n[0:2],grid,tilesize)]
     for n, cost in endconns:
         mesh[n][end] = cost
-    
+    # Add temp nodes for start
+    mesh[start] = dict([(n, calc_cost(start+(angle,),n,max_speed,max_angle)) for n in mesh 
+                        if not line_intersects_grid(start,n[0:2],grid,tilesize)])
+
     # Plan path
     neighbours = lambda n: mesh[n].keys()
     cost       = lambda n1, n2: mesh[n1][n2]
@@ -949,8 +945,6 @@ def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi
             del mesh[n][end]
     # Return path
     return nodes
-    
-
 
 class AutoVivification(dict):
     """Implementation of perl's autovivification feature."""
