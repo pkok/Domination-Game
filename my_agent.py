@@ -143,6 +143,9 @@ class Agent(object):
             else:
                 self.goal = self.obs.cps[random.randint(0,len(self.obs.cps)-1)][0:2]
                     
+        if isinstance(self.goal, int) or isinstance(self.goal, float):
+            self.goal = self.joint_observation.regions[int(self.goal)]
+
         # Drive to where the user clicked
         # Clicked is a list of tuples of (x, y, shift_down, is_selected)
         if self.selected and self.obs.clicked:
