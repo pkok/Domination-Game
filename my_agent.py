@@ -26,20 +26,21 @@ class Agent(object):
         self.initial_value = 10
         # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
         self.joint_observation = JointObservation(settings, team, nav_mesh, self.epsilon, self.initial_value)
-        self.joint_action = (3,3,7) #random.choice(joint_actions) # Initial random joint action for step 1.
+        #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
-
+        self.blobpath = None
+        
         # Read the binary blob, we're not using it though
-        if not self.joint_observation.state_action_pairs  and blob is not None:
+        if not self.joint_observation.state_action_pairs and blob is not None:
             # Remember the blob path so we can write back to it
             self.blobpath = blob.name
             self.joint_observation.state_action_pairs = pickle.loads(blob.read())
             print "Agent %s received binary blob of %s" % (
-               self.callsign, type(self.blobcontent))
+               self.callsign, type(self.joint_observation.state_action_pairs))
             # Reset the file so other agents can read it too.
             blob.seek(0) 
 
@@ -79,9 +80,11 @@ class Agent(object):
     def set_goal(self):
         """This function sets the goal for the agent.
         """
+        """
         # Check if agent reached goal.
         if self.goal is not None and point_dist(self.goal, self.obs.loc) < self.settings.tilesize:
             self.goal = None
+        
         
         # Walk to ammo if it is closer than current goal
         ammopacks = filter(lambda x: x[2] == "Ammo", self.obs.objects)
@@ -145,10 +148,16 @@ class Agent(object):
             # If nothing applies, walk to a random control point
             else:
                 self.goal = self.obs.cps[random.randint(0,len(self.obs.cps)-1)][0:2]
-                    
-        if isinstance(self.goal, int) or isinstance(self.goal, float):
-            self.goal = self.joint_observation.regions[int(self.goal)]
-
+            """
+            
+        self.goalregion = self.joint_observation.joint_action[self.id]
+        self.goal = self.joint_observation.coords[self.goalregion]
+        """
+        for agent_id, goal in self.goal.items():
+            if isinstance(goal, int) or isinstance(goal, float):
+                self.goal[agent_id] = self.joint_observation.regions[int(goal)]
+        """
+        
         # Drive to where the user clicked
         # Clicked is a list of tuples of (x, y, shift_down, is_selected)
         if self.selected and self.obs.clicked:
@@ -456,6 +465,7 @@ class JointObservation(object):
         self.mesh = transform_mesh(nav_mesh)
         self.epsilon = epsilon
         self.initial_value = initial_value
+        self.joint_action = {}
 
         # All regions
         self.regions = [((0,0),     (125,95)),
@@ -487,7 +497,7 @@ class JointObservation(object):
             self.coordlist.reverse()
         
         # Actual coordinates for each region. 
-        self.coords = {"2": coordlist[0], "6": coordlist[1], "8": coordlist[2], "12": coordlist[3]}
+        self.coords = {2: self.coordlist[0], 6: self.coordlist[1], 8: self.coordlist[2], 12: self.coordlist[3]}
 
         # Possible compass directions for the agents
         self.directions = ["N", "E", "S", "W"]
@@ -537,7 +547,7 @@ class JointObservation(object):
 
         # Create a list of all possible joint actions
         interestRegions = self.ROI["cp"] + self.ROI["am"]
-        self.joint_actions = list(product(interestRegions, repeat=len(self.friends)))
+        self.joint_actions = list(product(interestRegions, repeat=3))
 
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
@@ -591,8 +601,9 @@ class JointObservation(object):
 
     def chooseJointAction(self, key):
         action_value_dict = self.state_action_pairs[key]
+        temp_joint_action = []
         if randint(1,100) * 0.01 <= self.epsilon:
-            joint_action = random.choice(self.joint_actions)
+            temp_joint_action = list(random.choice(self.joint_actions))
         else:
             max_val = -1000
             joint_action = -1
@@ -602,7 +613,11 @@ class JointObservation(object):
                     value = self.initial_value
                 if value > max_val:
                     max_val = value
-                    joint_action = action
+                    temp_joint_action = list(action)
+                    
+        joint_action = {}            
+        for agent_id in sorted(self.friends.keys(), reverse=True):
+            joint_action[agent_id] = temp_joint_action.pop()
         return joint_action
 
     def setReward(self):
@@ -610,24 +625,16 @@ class JointObservation(object):
         """
         reward = 0
         state = self.process_joint_observation()
-        difference = self.score[0] - self.score[1]
-        """ Not used so far but maybe in the future.
-        lastDifference = observation.score[0] - observation.score[1]
-        """
-        if self.team == TEAM_RED:
-            if difference > 0:
-                reward = difference
-            else:
-                for userRegion in state.locations["regions"]:
-                    if userRegion == 3 or userRegion == 7 or userRegion == 9 or userRegion == 13:
-                        reward += 1
-        elif self.team == TEAM_BLUE:
-            if difference < 0:
-                reward = -difference
-            else:
-                for userRegion in state.locations["regions"]:
-                    if userRegion == 3 or userRegion == 7 or userRegion == 9 or userRegion == 13:
-                        reward += 1
+        difference = self.diff_score[0] if self.team == TEAM_RED else self.diff_score[1]
+        
+        if difference > 0:
+            reward = difference
+        else:
+            for agent_id, agentRegion in zip(self.friends, state.locations["regions"]):
+                if self.ammo[agent_id] > 0 and (agentRegion == 2 or agentRegion == 12):
+                    reward += 1
+                if self.ammo[agent_id] == 0 and (agentRegion == 2 or agentRegion == 12):
+                    reward -= 1
         return reward
 
     def update_policy(self, key, jointAction):
@@ -733,7 +740,6 @@ class JointObservation(object):
             ammoList.reverse()
 
         for key, value in ammoList:
-            print("%d, %d, %s", key[0], key[1], key[2])
             if key[2] == "Ammo": 
                 ammo_spawns_in = timer_range((value[1] + value[0] +1)/2 + self.settings.ammo_rate - self.step)
                 #ammo was last seen

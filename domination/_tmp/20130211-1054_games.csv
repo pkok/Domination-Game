@@ -1,0 +1,5 @@
+red_file,blue_file,score,score_red,score_blue,steps,ammo_red,ammo_blue
+/home/norbert/dominationgame/Domination-Game/domination/agent.py,/home/norbert/dominationgame/Domination-Game/domination/agent.py,0.436,436,564,600,48,52
+/home/norbert/dominationgame/Domination-Game/domination/agent.py,/home/norbert/dominationgame/Domination-Game/domination/agent.py,0.51,510,490,600,80,70
+/home/norbert/dominationgame/Domination-Game/domination/agent.py,/home/norbert/dominationgame/Domination-Game/domination/agent.py,0.859,859,141,600,63,65
+/home/norbert/dominationgame/Domination-Game/domination/agent.py,/home/norbert/dominationgame/Domination-Game/domination/agent.py,0.53,530,470,600,62,64
