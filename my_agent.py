@@ -611,6 +611,7 @@ class JointObservation(object):
                 for userRegion in state.locations["regions"]:
                     if userRegion == 3 or userRegion == 7 or userRegion == 9 or userRegion == 13:
                         reward += 1
+                        break
         elif self.team == TEAM_BLUE:
             if difference < 0:
                 reward = -difference
@@ -618,6 +619,7 @@ class JointObservation(object):
                 for userRegion in state.locations["regions"]:
                     if userRegion == 3 or userRegion == 7 or userRegion == 9 or userRegion == 13:
                         reward += 1
+                        break
         return reward
 
     def update_policy(self, key, jointAction):
