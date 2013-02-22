@@ -280,7 +280,6 @@ class Agent(object):
                     if left_hit and line_intersects_circ(self.obs.loc, right_coords, friendly, 6):
                         right_hit = False
 
-                print (left_hit, cen_hit, right_hit)
                 # Check optimal angle to shoot foe depending on which parts can be hit
                 opt_angle = 0
                 if cen_hit and left_hit and right_hit:
@@ -879,7 +878,7 @@ def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
         Each start and end point of an edge and its weight is given to
         mesh_transform, and its return value is stored in a new mesh.
     """
-    #return nav_mesh # Remove this line to activate the step-based mesh.
+    return nav_mesh # Remove this line to activate the step-based mesh.
     new_mesh = dict()
     angles = list(frange(-math.pi, math.pi, max_angle))
     for start in nav_mesh:
@@ -889,7 +888,7 @@ def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
             for angle_ in angles:
                 #new_mesh[start_][start+(angle_,)] = math.ceil(math.fabs(angle_fix(angle_-angle))/max_angle)
                 for end in nav_mesh[start]:
-                    new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)
+                    new_mesh[start_][end+(angle_,)] = (point_dist(start,end)/max_speed) #calc_cost(start_,end+(angle_,),max_speed,max_angle)
     return new_mesh
 
 def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
@@ -925,37 +924,38 @@ def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
 def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
     """ Uses astar to find a path from start to end,
         using the given mesh and tile grid.
-        
-        >>> grid = [[0,0,0,0,0],[0,0,0,0,0],[0,0,1,0,0],[0,0,0,0,0],[0,0,0,0,0]]
-        >>> mesh = make_nav_mesh([(2,2,1,1)],(0,0,4,4),1)
-        >>> our_find_path((0,0),0,(4,4),mesh,grid,1)
-        [(4, 1), (4, 4)]
     """
     # If there is a straight line, just return the end point
     if not line_intersects_grid(start, end, grid, tilesize):
         return [end]
     
+    mesh = copy.deepcopy(mesh)
     # Add temp nodes for end:
-    endconns = [(n, calc_cost(n,end,max_speed,max_angle)) for n in mesh 
+    endconns = [(n, (point_dist(n[0:2],end))) for n in mesh 
                 if not line_intersects_grid(end,n[0:2],grid,tilesize)]
     for n, cost in endconns:
         mesh[n][end] = cost
+    #calc_cost(n,end,max_speed,max_angle)
+    
     # Add temp nodes for start
-    mesh[start] = dict([(n, calc_cost(start+(angle,),n,max_speed,max_angle)) for n in mesh 
+    mesh[start] = dict([(n, (point_dist(start,n[0:2]))) for n in mesh 
                         if not line_intersects_grid(start,n[0:2],grid,tilesize)])
-
+    
+    #calc_cost(start+(angle,),n,max_speed,max_angle)
+    
     # Plan path
     neighbours = lambda n: mesh[n].keys()
     cost       = lambda n1, n2: mesh[n1][n2]
     goal       = lambda n: n == end
     heuristic  = lambda n: ((n[0]-end[0]) ** 2 + (n[1]-end[1]) ** 2) ** 0.5
     nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
-    
+    """
     # Remove temp nodes for start and end from mesh
     del mesh[start]
     for n in mesh:
         if mesh[n].has_key(end):
             del mesh[n][end]
+    """
     # Return path
     return nodes
 
