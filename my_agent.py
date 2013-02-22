@@ -34,6 +34,7 @@ class Agent(object):
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
+        self.allow_reverse_gear = False
 
         # Read the binary blob, we're not using it though
         if blob is not None:
@@ -84,6 +85,7 @@ class Agent(object):
         if ammopacks:
             if self.goal is None:
                 self.goal = ammopacks[0][0:2]
+                self.allow_reverse_gear = True
             else:
                 goal_path = our_find_path(self.obs.loc, self.obs.angle, self.goal,
                                     self.mesh, self.grid, self.settings.tilesize)
@@ -165,13 +167,24 @@ class Agent(object):
         if path:
             dx = path[0][0] - self.obs.loc[0]
             dy = path[0][1] - self.obs.loc[1]
-            path_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
+            path_angle_forward = angle_fix(math.atan2(dy, dx) - self.obs.angle)
+            path_angle_reverse = angle_fix(math.atan2(dy, dx) + self.obs.angle)
             path_dist = (dx**2 + dy**2)**0.5
+
+            if (abs(path_angle_reverse) < abs(path_angle_forward) and
+                    False and # Remove this line to enable reverse gear
+                    (self.allow_reverse_gear or not self.obs.ammo)):
+                speed = -1
+                path_angle = path_angle_reverse
+                self.allow_reverse_gear = False
+            else:
+                speed = 1
+                path_angle = path_angle_forward
 
             # Compute shoot and turn
             shoot, turn = self.compute_shoot(path_angle)
             # Compute speed
-            speed = self.compute_speed(turn, path_dist)
+            speed *= self.compute_speed(turn, path_dist)
 
         # If no path was found, do nothing
         else:
