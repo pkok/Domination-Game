@@ -24,11 +24,12 @@ class Agent(object):
         self.settings = settings
         # self.state_action_pairs = defaultdict(lambda: [None, 10])
         self.epsilon = 0.05
+        self.gamma = 0.9
+        self.alpha = 0.1
         self.initial_value = 10
-        self.state_action_pairs = AutoVivification()
         # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
-        self.joint_observation = JointObservation(settings, team, nav_mesh, self.state_action_pairs, self.epsilon, self.initial_value)
-        self.joint_action = (3,3,7) #random.choice(joint_actions) # Initial random joint action for step 1.
+        self.joint_observation = JointObservation(settings, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value)
+        self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
         self.goal = None
@@ -69,10 +70,19 @@ class Agent(object):
         # TODO: Set the agent's goal to the given location in joint_observation
         # agent_action = self.joint_observation.joint_action[]
         self.set_goal()
+        # self.set_goal_sarsa()
         
         # Compute and return the corresponding action
         return self.get_action()
     
+
+
+    def set_goal_sarsa(self):
+        """This function sets the goal for the agent.
+        """
+        pass
+        
+
     def set_goal(self):
         """This function sets the goal for the agent.
         """
@@ -445,14 +455,25 @@ class JointObservation(object):
     """
     __metaclass__ = Singleton
 
-    def __init__(self, settings, team, nav_mesh, state_action_pairs, epsilon, initial_value):
+    def __init__(self, settings, team, nav_mesh, epsilon, gamma, alpha, initial_value):
         
         self.team = team        
         # keeping it the same while I don't have a correct function. - P.
         self.mesh = transform_mesh(nav_mesh)
-        self.state_action_pairs = state_action_pairs
+        self.state_action_pairs = AutoVivification()
         self.epsilon = epsilon
+        self.gamma = gamma
+        self.alpha = alpha
         self.initial_value = initial_value
+
+        self.state = -1
+
+        self.old_state_key = -1
+        self.new_state_key = -1
+
+        self.old_joint_action = -1
+        self.new_joint_action = -1
+        self.reward = 0
 
         # All regions
         self.regions = [((0,0),     (125,95)),
@@ -473,7 +494,11 @@ class JointObservation(object):
                        ]
 
         # Regions of interest
-        self.ROI = {"cp": (3, 13), "am": (7,9), "rest": (1,2,4,5,6,10,11,12,14,15)}
+        self.ROI = {"cp": (2, 12), "am": (6,8), "rest": (0,1,3,4,5,9,10,11,13,14)}
+ 
+        # coordinate list [2, 6, 8, 12]
+        self.coordlist = [(216, 56), (152, 136), (312, 136), (248, 216)]
+
 
         # Switch the regions around when we start on the other side of the screen
         if self.team == TEAM_BLUE:
@@ -572,15 +597,18 @@ class JointObservation(object):
 
         self.called_agents.add(agent_id)
         if len(self.called_agents) == len(self.friends):
-            state = self.process_joint_observation() # Process the joint observation
-            key = state.toKey()
-            self.joint_action = self.chooseJointAction(key)
-            self.update_policy(key, self.joint_action) # Update policy when joint observation has been processed
+            self.state = self.process_joint_observation() # Process the joint observation
+            self.new_state_key = self.state.toKey()
+            self.chooseJointAction()
+            self.setReward()
 
-        
+            if self.old_state_key != -1:
+                self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
+            
 
-    def chooseJointAction(self, key):
-        action_value_dict = self.state_action_pairs[key]
+
+    def chooseJointAction(self):
+        action_value_dict = self.state_action_pairs[self.new_state_key]
         if randint(1,100) * 0.01 <= self.epsilon:
             joint_action = random.choice(self.joint_actions)
         else:
@@ -590,43 +618,55 @@ class JointObservation(object):
                 value = action_value_dict[action]
                 if value == {}:
                     value = self.initial_value
+                    # TODO: also update state_action_pairs dict with this value?
                 if value > max_val:
                     max_val = value
                     joint_action = action
-        return joint_action
+        self.new_joint_action = joint_action
 
     def setReward(self):
-        """ Set the future reward.
+        """ Compute the current reward.
         """
         reward = 0
-        state = self.process_joint_observation()
         difference = self.score[0] - self.score[1]
         """ Not used so far but maybe in the future.
         lastDifference = observation.score[0] - observation.score[1]
         """
+
+        roi = self.ROI["cp"] + self.ROI["am"]
         if self.team == TEAM_RED:
             if difference > 0:
                 reward = difference
             else:
-                for userRegion in state.locations["regions"]:
-                    if userRegion == 3 or userRegion == 7 or userRegion == 9 or userRegion == 13:
+                for userRegion in self.state.locations["regions"]:
+                    if userRegion in roi:
                         reward += 1
                         break
         elif self.team == TEAM_BLUE:
             if difference < 0:
                 reward = -difference
             else:
-                for userRegion in state.locations["regions"]:
-                    if userRegion == 3 or userRegion == 7 or userRegion == 9 or userRegion == 13:
+                for userRegion in self.state.locations["regions"]:
+                    if userRegion in roi:
                         reward += 1
                         break
-        return reward
+                        
+        self.reward = reward
 
-    def update_policy(self, key, jointAction):
-        """ Update the joint policy of the agents based on the current state.
+    def update_policy(self, oldStateKey, newStateKey):
+        """ Update the joint policy of the agents based on the current and the previous states and actions.
         """
-        pass
-        # self.state_action_pairs[state.toKey()][jointAction]
+        if (self.state_action_pairs[new_state_key][self.new_joint_action] == {}):
+            self.state_action_pairs[new_state_key][self.new_joint_action] = self.initial_value
+
+        old_state_val = self.state_action_pairs[old_state_key][self.old_joint_action]
+        new_val = old_state_val + self.alpha * (self.reward + self.gamma*new_state_val - old_state_val)
+
+        self.state_action_pairs[oldStateKey][jointAction] = new_val
+
+        # Update the new_state_key and the new_joint_action values.
+        self.old_state_key = self.new_state_key
+        self.old_joint_action = self.new_joint_action
 
 
     def process_joint_observation(self):
