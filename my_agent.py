@@ -5,6 +5,7 @@ import math
 import sys
 import time
 
+from domination.core import *
 from domination.libs import astar
 astar = astar.astar
 
@@ -221,7 +222,7 @@ class Agent(object):
                 cen_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
                 cen_dist = (dx**2 + dy**2)**0.5
                 
-                if (math.fabs(cen_angle) <= (self.settings.max_turn + pi/6) and 
+                if (abs(cen_angle) <= (self.settings.max_turn + pi/6) and 
                     cen_dist <= (self.settings.max_range + 6.0)):
                     approx_shootable.append((foe[0],foe[1],cen_angle,cen_dist,dx,dy))
             
@@ -315,7 +316,7 @@ class Agent(object):
                 shoot = True
                 best_dif = 100.0
                 for foe in really_shootable:
-                    cur_dif = math.fabs(path_angle - foe[2]) 
+                    cur_dif = abs(path_angle - foe[2]) 
                     if cur_dif < best_dif:
                         best_dif = cur_dif
                         turn = foe[2]
@@ -325,7 +326,7 @@ class Agent(object):
     def angle_possible(self, angle):
         """This function checks whether the agent can turn the given angle
         """
-        if math.fabs(angle) <= self.settings.max_turn:
+        if abs(angle) <= self.settings.max_turn:
             return True
         else:
             return False
@@ -337,7 +338,7 @@ class Agent(object):
               
         # If two possible angles, see which one is in turning range and closest to path angle
         if not interval:            
-            if (math.fabs(path_angle - min_angle) > math.fabs(path_angle - max_angle)):
+            if (abs(path_angle - min_angle) > abs(path_angle - max_angle)):
                 optimal_angle = max_angle
             else:
                 optimal_angle = min_angle
@@ -370,7 +371,7 @@ class Agent(object):
             if distance > 30:
                 distance = 30
             # Scale distance by how well the agent can move in the right direction
-            speed = distance*(1-((math.fabs(turn)-self.settings.max_turn)/(math.pi/2)))
+            speed = distance*(1-((abs(turn)-self.settings.max_turn)/(math.pi/2)))
         
         # If agent can reduce angle to zero, move the required distance
         else:
@@ -928,7 +929,7 @@ def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
             start_ = start + (angle,)
             new_mesh[start_] = dict()
             for angle_ in angles:
-                #new_mesh[start_][start+(angle_,)] = math.ceil(math.fabs(angle_fix(angle_-angle))/max_angle)
+                #new_mesh[start_][start+(angle_,)] = math.ceil(abs(angle_fix(angle_-angle))/max_angle)
                 for end in nav_mesh[start]:
                     new_mesh[start_][end+(angle_,)] = (point_dist(start,end)/max_speed) #calc_cost(start_,end+(angle_,),max_speed,max_angle)
     return new_mesh
@@ -941,7 +942,7 @@ def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
         if len(node2)==2:
             return 0
         else:
-            return math.ceil(math.fabs(angle_fix(node2[2] - node1[2])) / max_angle)
+            return math.ceil(abs(angle_fix(node2[2] - node1[2])) / max_angle)
     
     # Calculate the distance between the two nodes
     dx = node2[0] - node1[0]
@@ -949,13 +950,13 @@ def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
     dist = math.ceil((dx**2 + dy**2)**0.5 / max_speed)
 
     # Calculate the angle required to face the direction of node2
-    angle_dist1 = math.ceil(math.fabs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle)
+    angle_dist1 = math.ceil(abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle)
 
     # Calculate the angle required to face the direction specified by node2 after arriving
     if len(node2) == 2:
         angle_dist2 = 0
     else:
-        angle_dist2 = math.ceil(math.fabs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle)
+        angle_dist2 = math.ceil(abs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle)
     
     # Then calculate the travel cost in turns
     if angle_dist1 == 0:
