@@ -265,7 +265,7 @@ class Agent(object):
                 # Check if center can be hit
                 cen_hit = True
                 # Check for angle
-                if not abs(cen_angle) <= self.settings.max_turn:
+                if abs(cen_angle) > self.settings.max_turn:
                     cen_hit = False
                 # Check for walls
                 if cen_hit and line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
@@ -282,7 +282,7 @@ class Agent(object):
                 if edge_dist > self.settings.max_range:
                     left_hit = False
                 # Check for angle
-                if not abs(left_angle) <= self.settings.max_turn:
+                if abs(left_angle) > self.settings.max_turn:
                     left_hit = False
                 # Check for walls
                 if left_hit and line_intersects_grid(self.obs.loc, left_coords, self.grid, self.settings.tilesize):
@@ -298,7 +298,7 @@ class Agent(object):
                 if edge_dist > self.settings.max_range:
                     right_hit = False
                 #Check for angle
-                if not abs(right_angle) <= self.settings.max_turn:
+                if abs(right_angle) > self.settings.max_turn:
                     right_hit = False
                 # Check for walls
                 if line_intersects_grid(self.obs.loc, right_coords, self.grid, self.settings.tilesize):
