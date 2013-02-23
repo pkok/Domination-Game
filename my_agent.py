@@ -5,13 +5,12 @@ import math
 import sys
 import time
 
-from domination.core import *
 from domination.libs import astar
 astar = astar.astar
 
 class Agent(object):
     
-    NAME = "colaflesje"
+    NAME = "verfkwast"
     
     def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None, matchinfo=None, *args, **kwargs):
         """ Each agent is initialized at the beginning of each game.
@@ -222,7 +221,7 @@ class Agent(object):
                 cen_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
                 cen_dist = (dx**2 + dy**2)**0.5
                 
-                if (abs(cen_angle) <= (self.settings.max_turn + pi/6) and 
+                if (abs(cen_angle) <= (self.settings.max_turn + math.pi/6) and 
                     cen_dist <= (self.settings.max_range + 6.0)):
                     approx_shootable.append((foe[0],foe[1],cen_angle,cen_dist,dx,dy))
             
@@ -249,7 +248,7 @@ class Agent(object):
                 # Check if center can be hit
                 cen_hit = True
                 # Check for angle
-                if not self.angle_possible(cen_angle):
+                if not abs(cen_angle) <= self.settings.max_turn:
                     cen_hit = False
                 # Check for walls
                 if cen_hit and line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
@@ -259,13 +258,14 @@ class Agent(object):
                     if cen_hit and line_intersects_circ(self.obs.loc, foe[0:2], friendly, 6):
                         cen_hit = False
                 
+                
                 # Check if left edge can be hit
                 left_hit = True
                 # Check for distance
                 if edge_dist > self.settings.max_range:
                     left_hit = False
                 # Check for angle
-                if not self.angle_possible(left_angle):
+                if not abs(left_angle) <= self.settings.max_turn:
                     left_hit = False
                 # Check for walls
                 if left_hit and line_intersects_grid(self.obs.loc, left_coords, self.grid, self.settings.tilesize):
@@ -281,7 +281,7 @@ class Agent(object):
                 if edge_dist > self.settings.max_range:
                     right_hit = False
                 #Check for angle
-                if not self.angle_possible(right_angle):
+                if not abs(right_angle) <= self.settings.max_turn:
                     right_hit = False
                 # Check for walls
                 if line_intersects_grid(self.obs.loc, right_coords, self.grid, self.settings.tilesize):
@@ -322,14 +322,6 @@ class Agent(object):
                         turn = foe[2]
 
         return shoot, turn
-    
-    def angle_possible(self, angle):
-        """This function checks whether the agent can turn the given angle
-        """
-        if abs(angle) <= self.settings.max_turn:
-            return True
-        else:
-            return False
     
     def calc_optimal_angle(self, left_angle, right_angle, interval, path_angle):
         """This function returns the optimal angle given some (interval of) angles
