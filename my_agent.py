@@ -4,9 +4,11 @@ from random import randint, choice
 import math
 import sys
 import time
+import cPickle as pickle
 
 from domination.libs import astar
 astar = astar.astar
+
 
 class Agent(object):
     
@@ -27,9 +29,10 @@ class Agent(object):
         self.gamma = 0.9
         self.alpha = 0.1
         self.initial_value = 10
+        self.number_of_agents = 3
         # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
-        self.joint_observation = JointObservation(settings, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value)
-        self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
+        self.joint_observation = JointObservation(settings, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value, self.number_of_agents)
+        # self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
         self.goal = None
@@ -37,12 +40,18 @@ class Agent(object):
         self.selected = False
         self.allow_reverse_gear = False
 
+        self.blobpath = None
+        
         # Read the binary blob, we're not using it though
-        if blob is not None:
+        if not self.joint_observation.state_action_pairs and blob is not None:
+            # Remember the blob path so we can write back to it
+            self.blobpath = blob.name
+            self.joint_observation.state_action_pairs = pickle.loads(blob.read())
             print "Agent %s received binary blob of %s" % (
-               self.callsign, type(pickle.loads(blob.read())))
-            # Reset the file so other agents can read it.
+                self.callsign, type(self.joint_observation.state_action_pairs))
+            # Reset the file so other agents can read it too.
             blob.seek(0)
+
 
         # Recommended way to share variables between agents.
         if id == 0:
@@ -69,7 +78,7 @@ class Agent(object):
         """ 
         # TODO: Set the agent's goal to the given location in joint_observation
         # agent_action = self.joint_observation.joint_action[]
-        self.set_goal()
+        self.set_goal_sarsa()
         # self.set_goal_sarsa()
         
         # Compute and return the corresponding action
@@ -80,7 +89,15 @@ class Agent(object):
     def set_goal_sarsa(self):
         """This function sets the goal for the agent.
         """
-        pass
+        index = sorted(self.joint_observation.friends.keys()).index(self.id)
+        print "self.joint_observation.new_joint_action: " + str(self.joint_observation.new_joint_action)
+        goal_region = self.joint_observation.new_joint_action[index]
+        self.goal = self.joint_observation.coords[goal_region]
+
+        # Drive to where the user clicked
+        # Clicked is a list of tuples of (x, y, shift_down, is_selected)
+        if self.selected and self.obs.clicked:
+            self.goal = self.obs.clicked[0][0:2]
         
 
     def set_goal(self):
@@ -420,7 +437,18 @@ class Agent(object):
             interrupt (CTRL+C) by the user. Use it to
             store any learned variables and write logs/reports.
         """
-        pass
+        if self.id == 0 and self.blobpath is not None:
+            try:
+                # We simply write the same content back into the blob.
+                # in a real situation, the new blob would include updates to 
+                # your learned data.
+                blobfile = open(self.blobpath, 'wb')
+                pickle.dump(self.joint_observation.state_action_pairs, blobfile, pickle.HIGHEST_PROTOCOL)
+            except:
+                # We can't write to the blob, this is normal on AppEngine since
+                # we don't have filesystem access there.        
+                print "Agent %s can't write blob." % self.callsign
+
 
 class Singleton(type):
     """ Metaclass so only a single object from a class can be created.
@@ -448,24 +476,25 @@ class JointObservation(object):
     """
     __metaclass__ = Singleton
 
-    def __init__(self, settings, team, nav_mesh, epsilon, gamma, alpha, initial_value):
+    def __init__(self, settings, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents):
         
         self.team = team        
         # keeping it the same while I don't have a correct function. - P.
         self.mesh = transform_mesh(nav_mesh)
-        self.state_action_pairs = AutoVivification()
+        self.state_action_pairs = {}
         self.epsilon = epsilon
         self.gamma = gamma
         self.alpha = alpha
         self.initial_value = initial_value
+        self.number_of_agents = number_of_agents
 
         self.state = -1
 
-        self.old_state_key = -1
         self.new_state_key = -1
+        self.old_state_key = -1
 
-        self.old_joint_action = -1
         self.new_joint_action = -1
+        self.old_joint_action = -1
         self.reward = 0
 
         # All regions
@@ -492,10 +521,12 @@ class JointObservation(object):
         # coordinate list [2, 6, 8, 12]
         self.coordlist = [(216, 56), (152, 136), (312, 136), (248, 216)]
 
-
         # Switch the regions around when we start on the other side of the screen
         if self.team == TEAM_BLUE:
             self.regions.reverse()
+            self.coordlist.reverse()
+
+        self.coords = {2: self.coordlist[0], 6: self.coordlist[1], 8: self.coordlist[2], 12: self.coordlist[3]}
 
         # Possible compass directions for the agents
         self.directions = ["N", "E", "S", "W"]
@@ -545,7 +576,9 @@ class JointObservation(object):
 
         # Create a list of all possible joint actions
         interestRegions = self.ROI["cp"] + self.ROI["am"]
-        self.joint_actions = list(product(interestRegions, repeat=len(self.friends)))
+        self.joint_actions = list(product(interestRegions, repeat=self.number_of_agents))
+        print "JointObservation.friends: " + str(self.friends)
+        print "JointObservation.joint_actions: " + str(self.joint_actions)
 
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
@@ -601,50 +634,80 @@ class JointObservation(object):
 
 
     def chooseJointAction(self):
-        action_value_dict = self.state_action_pairs[self.new_state_key]
-        if randint(1,100) * 0.01 <= self.epsilon:
+        # if self.state_action_pairs[self.new_state_key] == {}:
+        #      for action in self.joint_action:
+        #          self.state_action_pairs[self.new_state_key][action] = self.initial_value
+
+        try:
+            action_value_dict = self.state_action_pairs[self.new_state_key]
+        except KeyError:
+            self.state_action_pairs[self.new_state_key] = {}
+            for action in self.joint_actions:
+                self.state_action_pairs[self.new_state_key][action] = self.initial_value
+                action_value_dict = self.state_action_pairs[self.new_state_key]
+        # # Initialize all state-action pairs with the initial value if this state is encoutered for the first time.
+        # if action_value_dict == {}:
+        #     for action in self.joint_actions:
+        #         action_value_dict[action] = self.initial_value
+        # print "action_value_dict: "+ str(action_value_dict)
+        
+        if randint(1,100) * 0.01 >= self.epsilon:
             joint_action = random.choice(self.joint_actions)
         else:
             max_val = -1000
             joint_action = -1
             for action in self.joint_actions:
                 value = action_value_dict[action]
-                if value == {}:
-                    value = self.initial_value
-                    # TODO: also update state_action_pairs dict with this value?
                 if value > max_val:
                     max_val = value
                     joint_action = action
         self.new_joint_action = joint_action
 
-    def setReward(self):
-        """ Compute the current reward.
-        """
-        reward = 0
-        difference = self.score[0] - self.score[1]
-        """ Not used so far but maybe in the future.
-        lastDifference = observation.score[0] - observation.score[1]
-        """
 
-        roi = self.ROI["cp"] + self.ROI["am"]
-        if self.team == TEAM_RED:
-            if difference > 0:
-                reward = difference
-            else:
-                for userRegion in self.state.locations["regions"]:
-                    if userRegion in roi:
-                        reward += 1
-                        break
-        elif self.team == TEAM_BLUE:
-            if difference < 0:
-                reward = -difference
-            else:
-                for userRegion in self.state.locations["regions"]:
-                    if userRegion in roi:
-                        reward += 1
-                        break
-                        
+    # def setReward(self):
+    #     """ Compute the current reward.
+    #     """
+    #     reward = 0
+    #     difference = self.score[0] - self.score[1]
+    #     """ Not used so far but maybe in the future.
+    #     lastDifference = observation.score[0] - observation.score[1]
+    #     """
+
+    #     roi = self.ROI["cp"] + self.ROI["am"]
+    #     if self.team == TEAM_RED:
+    #         if difference > 0:
+    #             reward = difference
+    #         else:
+    #             for userRegion in self.state.locations["regions"]:
+    #                 if userRegion in roi:
+    #                     reward += 1
+    #                     break
+    #     elif self.team == TEAM_BLUE:
+    #         if difference < 0:
+    #             reward = -difference
+    #         else:
+    #             for userRegion in self.state.locations["regions"]:
+    #                 if userRegion in roi:
+    #                     reward += 1
+    #                     break
+
+    #     self.reward = reward
+
+    
+    def setReward(self):
+        difference = self.diff_score[0] if self.team == TEAM_RED else self.diff_score[1]
+        
+        if difference > 0:
+            reward = difference
+        else:
+            for agent_id, agentRegion in zip(self.friends, state.locations["regions"]):
+                if self.ammo[agent_id] > 0 and (agentRegion == 2 or agentRegion == 12):
+                    reward += 1
+                if self.ammo[agent_id] == 0 and (agentRegion == 2 or agentRegion == 12):
+                    reward -= 1
+
         self.reward = reward
+
 
     def update_policy(self, oldStateKey, newStateKey):
         """ Update the joint policy of the agents based on the current and the previous states and actions.
@@ -993,12 +1056,3 @@ def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi
     """
     # Return path
     return nodes
-
-class AutoVivification(dict):
-    """Implementation of perl's autovivification feature."""
-    def __getitem__(self, item):
-        try:
-            return dict.__getitem__(self, item)
-        except KeyError:
-            value = self[item] = type(self)()
-            return value
