@@ -311,7 +311,6 @@ class Agent(object):
             else:
                 optimal_angle = path_angle
 
-        print (left_angle, right_angle, path_angle, optimal_angle)
         return optimal_angle
     
     def compute_speed(self, turn, distance):

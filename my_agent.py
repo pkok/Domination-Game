@@ -52,12 +52,6 @@ class Agent(object):
             # Reset the file so other agents can read it too.
             blob.seek(0)
 
-
-        # Recommended way to share variables between agents.
-        if id == 0:
-            self.all_agents = self.__class__.all_agents = []
-        self.all_agents.append(self)
-
     def observe(self, observation):
         """ Each agent is passed an observation using this function,
             before being asked for an action. You can store either
@@ -78,13 +72,11 @@ class Agent(object):
         """ 
         # TODO: Set the agent's goal to the given location in joint_observation
         # agent_action = self.joint_observation.joint_action[]
-        self.set_goal_sarsa()
         # self.set_goal_sarsa()
+        self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         return self.get_action()
-    
-
 
     def set_goal_sarsa(self):
         """This function sets the goal for the agent.
@@ -98,9 +90,8 @@ class Agent(object):
         # Clicked is a list of tuples of (x, y, shift_down, is_selected)
         if self.selected and self.obs.clicked:
             self.goal = self.obs.clicked[0][0:2]
-        
 
-    def set_goal(self):
+    def set_goal_hardcoded(self):
         """This function sets the goal for the agent.
         """
         # Check if agent reached goal.
@@ -362,7 +353,6 @@ class Agent(object):
             else:
                 optimal_angle = path_angle
 
-        print (left_angle, right_angle, path_angle, optimal_angle)
         return optimal_angle
     
     def compute_speed(self, turn, distance):
@@ -450,6 +440,105 @@ class Agent(object):
                 print "Agent %s can't write blob." % self.callsign
 
 
+########################################################################
+##### Pathfinding functions ############################################
+########################################################################
+
+def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
+    """ Recomputes a new weight for each edge of the navigation mesh.
+        
+        Each start and end point of an edge and its weight is given to
+        mesh_transform, and its return value is stored in a new mesh.
+    """
+    #return nav_mesh # Remove this line to activate the step-based mesh.
+    new_mesh = dict()
+    angles = list(frange(-math.pi, math.pi, max_angle))
+    for start in nav_mesh:
+        for angle in angles:
+            start_ = start + (angle,)
+            new_mesh[start_] = dict()
+            for angle_ in angles:
+                #new_mesh[start_][start+(angle_,)] = math.ceil(abs(angle_fix(angle_-angle))/max_angle)
+                for end in nav_mesh[start]:
+                    new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)
+    return new_mesh
+
+def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
+    """ Uses astar to find a path from start to end,
+        using the given mesh and tile grid.
+    """
+    # If there is a straight line, just return the end point
+    if not line_intersects_grid(start, end, grid, tilesize):
+        return [end]
+    
+    # Add temp nodes for end:
+    endconns = [(n, calc_cost(n,end,max_speed,max_angle)) for n in mesh 
+                if not line_intersects_grid(end,n[0:2],grid,tilesize)]
+    for n, cost in endconns:
+        mesh[n][end] = cost
+    
+    # Add temp nodes for start
+    start_list = []
+    for n in mesh:
+        if not line_intersects_grid(start,n[0:2],grid,tilesize):
+            start_list.append((n, calc_cost(start+(angle,),n,max_speed,max_angle)))
+    mesh[start] = dict(start_list)
+    
+    print mesh[start]
+    
+    # Plan path
+    neighbours = lambda n: mesh[n].keys()
+    cost       = lambda n1, n2: mesh[n1][n2]
+    goal       = lambda n: n == end
+    heuristic  = lambda n: ((n[0]-end[0])**2 + (n[1]-end[1])**2)**0.5
+    nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
+
+    # Remove temp nodes for start and end from mesh
+    del mesh[start]
+    for n in mesh:
+        if mesh[n].has_key(end):
+            del mesh[n][end]
+
+    # Return path
+    return nodes
+
+def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
+    """Calculate the turns necessary to travel from node1 to node2
+    """
+    return point_dist(node1,node2)# Remove this line to activate the step-based mesh.
+    
+    # If node1 is at the same spot as node2, simply return the angle difference
+    if node1[0:2] == node2[0:2]:
+        if len(node2)==2:
+            return 0
+        else:
+            return math.ceil(abs(angle_fix(node2[2] - node1[2])) / max_angle)
+    
+    # Calculate the distance between the two nodes
+    dx = node2[0] - node1[0]
+    dy = node2[1] - node1[1]
+    dist = math.ceil((dx**2 + dy**2)**0.5 / max_speed)
+
+    # Calculate the angle required to face the direction of node2
+    angle_dist1 = math.ceil(abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle)
+
+    # Calculate the angle required to face the direction specified by node2 after arriving
+    if len(node2) == 2:
+        angle_dist2 = 0
+    else:
+        angle_dist2 = math.ceil(abs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle)
+    
+    # Then calculate the travel cost in turns
+    if angle_dist1 == 0:
+        return dist + angle_dist2
+    else:
+        return dist + angle_dist1 - 1 + angle_dist2
+
+
+########################################################################
+##### Singleton class ##################################################
+########################################################################
+    
 class Singleton(type):
     """ Metaclass so only a single object from a class can be created.
 
@@ -469,6 +558,11 @@ class Singleton(type):
 # Container for data in the JointObservation.
 AgentData = namedtuple("AgentData", ["x", "y", "angle", 
                                      "ammo", "collided", "respawn_in", "hit"])
+
+
+########################################################################
+##### JointObservation class ###########################################
+########################################################################
 
 class JointObservation(object):
     """ A singleton object representing the joint observation of all our
@@ -580,6 +674,7 @@ class JointObservation(object):
         print "JointObservation.friends: " + str(self.friends)
         print "JointObservation.joint_actions: " + str(self.joint_actions)
 
+
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
             information.
@@ -630,7 +725,6 @@ class JointObservation(object):
 
             if self.old_state_key != -1:
                 self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
-            
 
 
     def chooseJointAction(self):
@@ -840,12 +934,10 @@ class JointObservation(object):
         return state
 
 
-
-
-
 ########################################################################
 ##### State class ######################################################
 ########################################################################
+
 class State(object):
 
     def __init__(self):
@@ -880,10 +972,10 @@ class State(object):
         return key
 
 
-
 ########################################################################
 ##### JointAction class ################################################
 ########################################################################
+
 class JoinAction(object):
 
     # Our strategies define the % of bots that go for certain goals.
@@ -966,93 +1058,6 @@ class JoinAction(object):
 								   "fa08"	: ("Agent1","am2","Agent2","am2","Agent3","am2")
 								  }
     '''
-							 
+    
     def __init__(self):
         pass
-
-def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
-    """ Recomputes a new weight for each edge of the navigation mesh.
-        
-        Each start and end point of an edge and its weight is given to
-        mesh_transform, and its return value is stored in a new mesh.
-    """
-    return nav_mesh # Remove this line to activate the step-based mesh.
-    new_mesh = dict()
-    angles = list(frange(-math.pi, math.pi, max_angle))
-    for start in nav_mesh:
-        for angle in angles:
-            start_ = start + (angle,)
-            new_mesh[start_] = dict()
-            for angle_ in angles:
-                #new_mesh[start_][start+(angle_,)] = math.ceil(abs(angle_fix(angle_-angle))/max_angle)
-                for end in nav_mesh[start]:
-                    new_mesh[start_][end+(angle_,)] = (point_dist(start,end)/max_speed) #calc_cost(start_,end+(angle_,),max_speed,max_angle)
-    return new_mesh
-
-def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
-    """Calculate the turns necessary to travel from node1 to node2
-    """
-    # If node1 is at the same spot as node2, simply return the angle difference
-    if node1[0:2] == node2[0:2]:
-        if len(node2)==2:
-            return 0
-        else:
-            return math.ceil(abs(angle_fix(node2[2] - node1[2])) / max_angle)
-    
-    # Calculate the distance between the two nodes
-    dx = node2[0] - node1[0]
-    dy = node2[1] - node1[1]
-    dist = math.ceil((dx**2 + dy**2)**0.5 / max_speed)
-
-    # Calculate the angle required to face the direction of node2
-    angle_dist1 = math.ceil(abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle)
-
-    # Calculate the angle required to face the direction specified by node2 after arriving
-    if len(node2) == 2:
-        angle_dist2 = 0
-    else:
-        angle_dist2 = math.ceil(abs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle)
-    
-    # Then calculate the travel cost in turns
-    if angle_dist1 == 0:
-        return dist + angle_dist2
-    else:
-        return dist + angle_dist1 - 1 + angle_dist2
-
-def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
-    """ Uses astar to find a path from start to end,
-        using the given mesh and tile grid.
-    """
-    # If there is a straight line, just return the end point
-    if not line_intersects_grid(start, end, grid, tilesize):
-        return [end]
-    
-    mesh = copy.deepcopy(mesh)
-    # Add temp nodes for end:
-    endconns = [(n, (point_dist(n[0:2],end))) for n in mesh 
-                if not line_intersects_grid(end,n[0:2],grid,tilesize)]
-    for n, cost in endconns:
-        mesh[n][end] = cost
-    #calc_cost(n,end,max_speed,max_angle)
-    
-    # Add temp nodes for start
-    mesh[start] = dict([(n, (point_dist(start,n[0:2]))) for n in mesh 
-                        if not line_intersects_grid(start,n[0:2],grid,tilesize)])
-    
-    #calc_cost(start+(angle,),n,max_speed,max_angle)
-    
-    # Plan path
-    neighbours = lambda n: mesh[n].keys()
-    cost       = lambda n1, n2: mesh[n1][n2]
-    goal       = lambda n: n == end
-    heuristic  = lambda n: ((n[0]-end[0]) ** 2 + (n[1]-end[1]) ** 2) ** 0.5
-    nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
-    """
-    # Remove temp nodes for start and end from mesh
-    del mesh[start]
-    for n in mesh:
-        if mesh[n].has_key(end):
-            del mesh[n][end]
-    """
-    # Return path
-    return nodes
