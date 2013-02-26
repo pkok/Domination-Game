@@ -100,9 +100,17 @@ class Agent(object):
         # Walk to ammo if it is closer than current goal
         ammopacks = filter(lambda x: x[2] == "Ammo", self.obs.objects)
         if ammopacks:
+            dx = ammopacks[0][0] - self.obs.loc[0]
+            dy = ammopacks[0][1] - self.obs.loc[1]
+            ammo_angle_forward = angle_fix(math.atan2(dy, dx) - self.obs.angle)
+            ammo_angle_reverse = angle_fix(ammo_angle_forward - math.pi)
+            ammo_dist = (dx**2 + dy**2)**0.5
+
             if self.goal is None:
                 self.goal = ammopacks[0][0:2]
-                self.allow_reverse_gear = True
+                if (abs(ammo_dist) <= 3 * self.settings.max_speed and
+                    abs(ammo_angle_reverse) < self.settings.max_turn):
+                    self.allow_reverse_gear = True
             else:
                 goal_path = our_find_path(self.obs.loc, self.obs.angle, self.goal,
                                     self.mesh, self.grid, self.settings.tilesize)
@@ -185,14 +193,14 @@ class Agent(object):
             dx = path[0][0] - self.obs.loc[0]
             dy = path[0][1] - self.obs.loc[1]
             path_angle_forward = angle_fix(math.atan2(dy, dx) - self.obs.angle)
-            path_angle_reverse = angle_fix(math.atan2(dy, dx) + self.obs.angle)
+            path_angle_reverse = angle_fix(path_angle_forward - math.pi)
             path_dist = (dx**2 + dy**2)**0.5
 
             if (abs(path_angle_reverse) < abs(path_angle_forward) and
                     False and # Remove this line to enable reverse gear
                     (self.allow_reverse_gear or not self.obs.ammo)):
                 speed = -1
-                path_angle = path_angle_reverse
+                path_angle = -path_angle_reverse
                 self.allow_reverse_gear = False
             else:
                 speed = 1
@@ -1059,5 +1067,22 @@ class JoinAction(object):
 								  }
     '''
     
-    def __init__(self):
-        pass
+    # Calculate the distance between the two nodes
+    dx = node2[0] - node1[0]
+    dy = node2[1] - node1[1]
+    dist = math.ceil((dx**2 + dy**2)**0.5 / max_speed)
+
+    # Calculate the angle required to face the direction of node2
+    angle_dist1 = math.ceil(math.fabs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle)
+
+    # Calculate the angle required to face the direction specified by node2 after arriving
+    if len(node2) == 2:
+        angle_dist2 = 0
+    else:
+        angle_dist2 = math.ceil(math.fabs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle)
+    
+    # Then calculate the travel cost in turns
+    if angle_dist1 == 0:
+        return dist + angle_dist2
+    else:
+        return dist + angle_dist1 - 1 + angle_dist2
