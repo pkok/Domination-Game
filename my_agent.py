@@ -325,7 +325,6 @@ class Agent(object):
                         best_dif = cur_dif
                         turn = foe[2]
                 # Compute which agent you shoot
-
                 bullet_angle = turn + self.obs.angle
                 bullet_path = (math.cos(bullet_angle), math.sin(bullet_angle))
                 bullet_path = point_mul(bullet_path, self.settings.max_range)
@@ -809,7 +808,7 @@ class JointObservation(object):
         if difference > 0:
             reward = difference
         else:
-            for agent_id, agentRegion in zip(self.friends, state.locations["regions"]):
+            for agent_id, agentRegion in zip(self.friends, self.state.locations["regions"]):
                 if self.ammo[agent_id] > 0 and (agentRegion == 2 or agentRegion == 12):
                     reward += 1
                 if self.ammo[agent_id] == 0 and (agentRegion == 2 or agentRegion == 12):
