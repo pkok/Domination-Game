@@ -890,8 +890,9 @@ class JointObservation(object):
         # if (self.cps["()"])
         # self.diff_score = (0, 0)
         cp_state = ()
-        cp_top = self.cps[(216, 56)]
-        cp_bottom = self.cps[(248, 216)]
+        cp_positions = sorted(self.cps.keys(), key=lambda x: x[1])
+        cp_top = cp_positions[-1]
+        cp_bottom = cp_positions[0]
         cp_top_state = cp_top[0] == self.team
         cp_bottom_state = cp_bottom[0] == self.team
         # cases in which the score tells all
