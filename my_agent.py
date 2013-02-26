@@ -31,7 +31,7 @@ class Agent(object):
         self.initial_value = 10
         self.number_of_agents = 3
         # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
-        self.joint_observation = JointObservation(settings, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value, self.number_of_agents)
+        self.joint_observation = JointObservation(settings, field_grid, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value, self.number_of_agents)
         # self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
@@ -120,10 +120,10 @@ class Agent(object):
                     abs(ammo_angle_reverse) < self.settings.max_turn):
                     self.allow_reverse_gear = True
             else:
-                goal_path = our_find_path(self.obs.loc, self.obs.angle, self.goal,
-                                    self.mesh, self.grid, self.settings.tilesize)
-                ammo_path = our_find_path(self.obs.loc, self.obs.angle, ammopacks[0][0:2],
-                                    self.mesh, self.grid, self.settings.tilesize)
+                goal_path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
+                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
+                ammo_path = our_find_path(self.obs.loc, self.obs.angle, ammopacks[0][0:2], self.mesh, self.grid,
+                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
                 if self.calc_path_length(ammo_path) < self.calc_path_length(goal_path):
                     self.goal = ammopacks[0][0:2]
             return
@@ -135,7 +135,7 @@ class Agent(object):
             cp1 = self.obs.cps[0][2] == team
             cp2 = self.obs.cps[1][2] == team
 
-            ammo_positions = [(152,136), (312,136)]
+            ammo_positions = [(168,168), (296,104)]
             
             at_cp1 = (point_dist(self.obs.cps[0][0:2], self.obs.loc) < self.settings.tilesize)
             at_cp2 = (point_dist(self.obs.cps[1][0:2], self.obs.loc) < self.settings.tilesize)
@@ -176,7 +176,7 @@ class Agent(object):
         """This function returns the action tuple for the agent.
         """
         # Compute path and angle to path
-        path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.tilesize)
+        path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
         if path:
             dx = path[0][0] - self.obs.loc[0]
             dy = path[0][1] - self.obs.loc[1]
@@ -419,7 +419,7 @@ class Agent(object):
             """
             # Draw line to goal along the planned path
             if self.goal is not None:
-                path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.tilesize)
+                path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
                 if path:
                     for i in range(len(path)):
                         if i == 0:
@@ -451,19 +451,25 @@ class Agent(object):
 ##### Pathfinding functions ############################################
 ########################################################################
 
-def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
+def transform_mesh(nav_mesh, grid, tilesize, max_speed=40, max_angle=math.pi/4):
     """ Recomputes a new weight for each edge of the navigation mesh.
         
         Each start and end point of an edge and its weight is given to
         mesh_transform, and its return value is stored in a new mesh.
     """
-    #return nav_mesh # Remove this line to activate the step-based mesh.
-    new_mesh = dict()
-    angles = list(frange(-math.pi, math.pi, max_angle))
+    full_mesh = {}
     for start in nav_mesh:
+        full_mesh[start] = {}
+        for end in nav_mesh:
+            if not line_intersects_grid(start, end, grid, tilesize):
+                full_mesh[start][end] = 0
+    
+    new_mesh = {}
+    angles = list(frange(-math.pi, math.pi, max_angle))
+    for start in full_mesh:
         for angle in angles:
             start_ = start + (angle,)
-            new_mesh[start_] = dict()
+            new_mesh[start_] = {}
             for angle_ in angles:
                 #new_mesh[start_][start+(angle_,)] = math.ceil(abs(angle_fix(angle_-angle))/max_angle)
                 for end in nav_mesh[start]:
@@ -495,7 +501,7 @@ def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi
     neighbours = lambda n: mesh[n].keys()
     cost       = lambda n1, n2: mesh[n1][n2]
     goal       = lambda n: n == end
-    heuristic  = lambda n: ((n[0]-end[0])**2 + (n[1]-end[1])**2)**0.5
+    heuristic  = lambda n: ((n[0]-end[0])**2 + (n[1]-end[1])**2)**0.5 / max_speed
     nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
 
     # Remove temp nodes for start and end from mesh
@@ -510,7 +516,7 @@ def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi
 def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
     """Calculate the turns necessary to travel from node1 to node2
     """
-    return point_dist(node1,node2)# Remove this line to activate the step-based mesh.
+    #return point_dist(node1,node2) / max_speed# Remove this line to activate the step-based mesh.
     
     # If node1 is at the same spot as node2, simply return the angle difference
     if node1[0:2] == node2[0:2]:
@@ -575,11 +581,11 @@ class JointObservation(object):
     """
     __metaclass__ = Singleton
 
-    def __init__(self, settings, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents):
+    def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents):
         
         self.team = team        
         # keeping it the same while I don't have a correct function. - P.
-        self.mesh = transform_mesh(nav_mesh)
+        self.mesh = transform_mesh(nav_mesh, grid, settings.tilesize, settings.max_speed, settings.max_turn)
         self.state_action_pairs = {}
         self.epsilon = epsilon
         self.gamma = gamma
