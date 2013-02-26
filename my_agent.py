@@ -324,11 +324,17 @@ class Agent(object):
                     if cur_dif < best_dif:
                         best_dif = cur_dif
                         turn = foe[2]
-                        shoot = foe[0:2]
-                bullet_path = self.loc
                 # Compute which agent you shoot
+
+                bullet_angle = turn + self.obs.angle
+                bullet_path = (math.cos(bullet_angle), math.sin(bullet_angle))
+                bullet_path = point_mul(bullet_path, self.settings.max_range)
+                t = 1.0
                 for foe in really_shootable:
-                    pass
+                    t_ = line_intersects_circ(self.obs.loc, bullet_path, foe[0:2], 6.0)[0]
+                    if t_ < t:
+                        t = t_
+                        shoot = foe[0:2]
 
         return shoot, turn
     
@@ -733,7 +739,7 @@ class JointObservation(object):
 
     
     def goal_chosen(self, goal):
-        return filter(lambda x: x[0] != goal, self.chosen_goals.values())
+        return any(lambda x: x[0] != goal, self.chosen_goals.values())
 
 
     def chooseJointAction(self):
