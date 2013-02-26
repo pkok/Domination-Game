@@ -4,13 +4,15 @@ from random import randint, choice
 import math
 import sys
 import time
+import cPickle as pickle
 
 from domination.libs import astar
 astar = astar.astar
 
+
 class Agent(object):
     
-    NAME = "colaflesje"
+    NAME = "verfkwast"
     
     def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None, matchinfo=None, *args, **kwargs):
         """ Each agent is initialized at the beginning of each game.
@@ -27,9 +29,10 @@ class Agent(object):
         self.gamma = 0.9
         self.alpha = 0.1
         self.initial_value = 10
+        self.number_of_agents = 3
         # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
-        self.joint_observation = JointObservation(settings, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value)
-        self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
+        self.joint_observation = JointObservation(settings, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value, self.number_of_agents)
+        # self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
         self.goal = None
@@ -37,17 +40,17 @@ class Agent(object):
         self.selected = False
         self.allow_reverse_gear = False
 
+        self.blobpath = None
+        
         # Read the binary blob, we're not using it though
-        if blob is not None:
+        if not self.joint_observation.state_action_pairs and blob is not None:
+            # Remember the blob path so we can write back to it
+            self.blobpath = blob.name
+            self.joint_observation.state_action_pairs = pickle.loads(blob.read())
             print "Agent %s received binary blob of %s" % (
-               self.callsign, type(pickle.loads(blob.read())))
-            # Reset the file so other agents can read it.
+                self.callsign, type(self.joint_observation.state_action_pairs))
+            # Reset the file so other agents can read it too.
             blob.seek(0)
-
-        # Recommended way to share variables between agents.
-        if id == 0:
-            self.all_agents = self.__class__.all_agents = []
-        self.all_agents.append(self)
 
     def observe(self, observation):
         """ Each agent is passed an observation using this function,
@@ -69,21 +72,26 @@ class Agent(object):
         """ 
         # TODO: Set the agent's goal to the given location in joint_observation
         # agent_action = self.joint_observation.joint_action[]
-        self.set_goal()
         # self.set_goal_sarsa()
+        self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         return self.get_action()
-    
-
 
     def set_goal_sarsa(self):
         """This function sets the goal for the agent.
         """
-        pass
-        
+        index = sorted(self.joint_observation.friends.keys()).index(self.id)
+        print "self.joint_observation.new_joint_action: " + str(self.joint_observation.new_joint_action)
+        goal_region = self.joint_observation.new_joint_action[index]
+        self.goal = self.joint_observation.coords[goal_region]
 
-    def set_goal(self):
+        # Drive to where the user clicked
+        # Clicked is a list of tuples of (x, y, shift_down, is_selected)
+        if self.selected and self.obs.clicked:
+            self.goal = self.obs.clicked[0][0:2]
+
+    def set_goal_hardcoded(self):
         """This function sets the goal for the agent.
         """
         # Check if agent reached goal.
@@ -229,7 +237,7 @@ class Agent(object):
                 cen_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
                 cen_dist = (dx**2 + dy**2)**0.5
                 
-                if (math.fabs(cen_angle) <= (self.settings.max_turn + pi/6) and 
+                if (abs(cen_angle) <= (self.settings.max_turn + math.pi/6) and 
                     cen_dist <= (self.settings.max_range + 6.0)):
                     approx_shootable.append((foe[0],foe[1],cen_angle,cen_dist,dx,dy))
             
@@ -256,7 +264,7 @@ class Agent(object):
                 # Check if center can be hit
                 cen_hit = True
                 # Check for angle
-                if not self.angle_possible(cen_angle):
+                if abs(cen_angle) > self.settings.max_turn:
                     cen_hit = False
                 # Check for walls
                 if cen_hit and line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
@@ -266,13 +274,14 @@ class Agent(object):
                     if cen_hit and line_intersects_circ(self.obs.loc, foe[0:2], friendly, 6):
                         cen_hit = False
                 
+                
                 # Check if left edge can be hit
                 left_hit = True
                 # Check for distance
                 if edge_dist > self.settings.max_range:
                     left_hit = False
                 # Check for angle
-                if not self.angle_possible(left_angle):
+                if abs(left_angle) > self.settings.max_turn:
                     left_hit = False
                 # Check for walls
                 if left_hit and line_intersects_grid(self.obs.loc, left_coords, self.grid, self.settings.tilesize):
@@ -288,7 +297,7 @@ class Agent(object):
                 if edge_dist > self.settings.max_range:
                     right_hit = False
                 #Check for angle
-                if not self.angle_possible(right_angle):
+                if abs(right_angle) > self.settings.max_turn:
                     right_hit = False
                 # Check for walls
                 if line_intersects_grid(self.obs.loc, right_coords, self.grid, self.settings.tilesize):
@@ -323,20 +332,12 @@ class Agent(object):
                 shoot = True
                 best_dif = 100.0
                 for foe in really_shootable:
-                    cur_dif = math.fabs(path_angle - foe[2]) 
+                    cur_dif = abs(path_angle - foe[2]) 
                     if cur_dif < best_dif:
                         best_dif = cur_dif
                         turn = foe[2]
 
         return shoot, turn
-    
-    def angle_possible(self, angle):
-        """This function checks whether the agent can turn the given angle
-        """
-        if math.fabs(angle) <= self.settings.max_turn:
-            return True
-        else:
-            return False
     
     def calc_optimal_angle(self, left_angle, right_angle, interval, path_angle):
         """This function returns the optimal angle given some (interval of) angles
@@ -345,7 +346,7 @@ class Agent(object):
               
         # If two possible angles, see which one is in turning range and closest to path angle
         if not interval:            
-            if (math.fabs(path_angle - min_angle) > math.fabs(path_angle - max_angle)):
+            if (abs(path_angle - min_angle) > abs(path_angle - max_angle)):
                 optimal_angle = max_angle
             else:
                 optimal_angle = min_angle
@@ -377,7 +378,7 @@ class Agent(object):
             if distance > 30:
                 distance = 30
             # Scale distance by how well the agent can move in the right direction
-            speed = distance*(1-((math.fabs(turn)-self.settings.max_turn)/(math.pi/2)))
+            speed = distance*(1-((abs(turn)-self.settings.max_turn)/(math.pi/2)))
         
         # If agent can reduce angle to zero, move the required distance
         else:
@@ -434,8 +435,118 @@ class Agent(object):
             interrupt (CTRL+C) by the user. Use it to
             store any learned variables and write logs/reports.
         """
-        pass
+        if self.id == 0 and self.blobpath is not None:
+            try:
+                # We simply write the same content back into the blob.
+                # in a real situation, the new blob would include updates to 
+                # your learned data.
+                blobfile = open(self.blobpath, 'wb')
+                pickle.dump(self.joint_observation.state_action_pairs, blobfile, pickle.HIGHEST_PROTOCOL)
+            except:
+                # We can't write to the blob, this is normal on AppEngine since
+                # we don't have filesystem access there.        
+                print "Agent %s can't write blob." % self.callsign
 
+
+########################################################################
+##### Pathfinding functions ############################################
+########################################################################
+
+def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
+    """ Recomputes a new weight for each edge of the navigation mesh.
+        
+        Each start and end point of an edge and its weight is given to
+        mesh_transform, and its return value is stored in a new mesh.
+    """
+    #return nav_mesh # Remove this line to activate the step-based mesh.
+    new_mesh = dict()
+    angles = list(frange(-math.pi, math.pi, max_angle))
+    for start in nav_mesh:
+        for angle in angles:
+            start_ = start + (angle,)
+            new_mesh[start_] = dict()
+            for angle_ in angles:
+                #new_mesh[start_][start+(angle_,)] = math.ceil(abs(angle_fix(angle_-angle))/max_angle)
+                for end in nav_mesh[start]:
+                    new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)
+    return new_mesh
+
+def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
+    """ Uses astar to find a path from start to end,
+        using the given mesh and tile grid.
+    """
+    # If there is a straight line, just return the end point
+    if not line_intersects_grid(start, end, grid, tilesize):
+        return [end]
+    
+    # Add temp nodes for end:
+    endconns = [(n, calc_cost(n,end,max_speed,max_angle)) for n in mesh 
+                if not line_intersects_grid(end,n[0:2],grid,tilesize)]
+    for n, cost in endconns:
+        mesh[n][end] = cost
+    
+    # Add temp nodes for start
+    start_list = []
+    for n in mesh:
+        if not line_intersects_grid(start,n[0:2],grid,tilesize):
+            start_list.append((n, calc_cost(start+(angle,),n,max_speed,max_angle)))
+    mesh[start] = dict(start_list)
+    
+    print mesh[start]
+    
+    # Plan path
+    neighbours = lambda n: mesh[n].keys()
+    cost       = lambda n1, n2: mesh[n1][n2]
+    goal       = lambda n: n == end
+    heuristic  = lambda n: ((n[0]-end[0])**2 + (n[1]-end[1])**2)**0.5
+    nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
+
+    # Remove temp nodes for start and end from mesh
+    del mesh[start]
+    for n in mesh:
+        if mesh[n].has_key(end):
+            del mesh[n][end]
+
+    # Return path
+    return nodes
+
+def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
+    """Calculate the turns necessary to travel from node1 to node2
+    """
+    return point_dist(node1,node2)# Remove this line to activate the step-based mesh.
+    
+    # If node1 is at the same spot as node2, simply return the angle difference
+    if node1[0:2] == node2[0:2]:
+        if len(node2)==2:
+            return 0
+        else:
+            return math.ceil(abs(angle_fix(node2[2] - node1[2])) / max_angle)
+    
+    # Calculate the distance between the two nodes
+    dx = node2[0] - node1[0]
+    dy = node2[1] - node1[1]
+    dist = math.ceil((dx**2 + dy**2)**0.5 / max_speed)
+
+    # Calculate the angle required to face the direction of node2
+    angle_dist1 = math.ceil(abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle)
+
+    # Calculate the angle required to face the direction specified by node2 after arriving
+    if len(node2) == 2:
+        angle_dist2 = 0
+    else:
+        angle_dist2 = math.ceil(abs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle)
+    
+    # Then calculate the travel cost in turns
+    if angle_dist1 == 0:
+        return dist + angle_dist2
+    else:
+        return dist + angle_dist1 - 1 + angle_dist2
+
+
+########################################################################
+##### Singleton class ##################################################
+########################################################################
+    
 class Singleton(type):
     """ Metaclass so only a single object from a class can be created.
 
@@ -456,30 +567,36 @@ class Singleton(type):
 AgentData = namedtuple("AgentData", ["x", "y", "angle", 
                                      "ammo", "collided", "respawn_in", "hit"])
 
+
+########################################################################
+##### JointObservation class ###########################################
+########################################################################
+
 class JointObservation(object):
     """ A singleton object representing the joint observation of all our
         agents. It should be updated during Agent.observe.
     """
     __metaclass__ = Singleton
 
-    def __init__(self, settings, team, nav_mesh, epsilon, gamma, alpha, initial_value):
+    def __init__(self, settings, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents):
         
         self.team = team        
         # keeping it the same while I don't have a correct function. - P.
         self.mesh = transform_mesh(nav_mesh)
-        self.state_action_pairs = AutoVivification()
+        self.state_action_pairs = {}
         self.epsilon = epsilon
         self.gamma = gamma
         self.alpha = alpha
         self.initial_value = initial_value
+        self.number_of_agents = number_of_agents
 
         self.state = -1
 
-        self.old_state_key = -1
         self.new_state_key = -1
+        self.old_state_key = -1
 
-        self.old_joint_action = -1
         self.new_joint_action = -1
+        self.old_joint_action = -1
         self.reward = 0
 
         # All regions
@@ -506,10 +623,12 @@ class JointObservation(object):
         # coordinate list [2, 6, 8, 12]
         self.coordlist = [(216, 56), (152, 136), (312, 136), (248, 216)]
 
-
         # Switch the regions around when we start on the other side of the screen
         if self.team == TEAM_BLUE:
             self.regions.reverse()
+            self.coordlist.reverse()
+
+        self.coords = {2: self.coordlist[0], 6: self.coordlist[1], 8: self.coordlist[2], 12: self.coordlist[3]}
 
         # Possible compass directions for the agents
         self.directions = ["N", "E", "S", "W"]
@@ -559,7 +678,10 @@ class JointObservation(object):
 
         # Create a list of all possible joint actions
         interestRegions = self.ROI["cp"] + self.ROI["am"]
-        self.joint_actions = list(product(interestRegions, repeat=len(self.friends)))
+        self.joint_actions = list(product(interestRegions, repeat=self.number_of_agents))
+        print "JointObservation.friends: " + str(self.friends)
+        print "JointObservation.joint_actions: " + str(self.joint_actions)
+
 
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
@@ -611,54 +733,83 @@ class JointObservation(object):
 
             if self.old_state_key != -1:
                 self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
-            
 
 
     def chooseJointAction(self):
-        action_value_dict = self.state_action_pairs[self.new_state_key]
-        if randint(1,100) * 0.01 <= self.epsilon:
+        # if self.state_action_pairs[self.new_state_key] == {}:
+        #      for action in self.joint_action:
+        #          self.state_action_pairs[self.new_state_key][action] = self.initial_value
+
+        try:
+            action_value_dict = self.state_action_pairs[self.new_state_key]
+        except KeyError:
+            self.state_action_pairs[self.new_state_key] = {}
+            for action in self.joint_actions:
+                self.state_action_pairs[self.new_state_key][action] = self.initial_value
+                action_value_dict = self.state_action_pairs[self.new_state_key]
+        # # Initialize all state-action pairs with the initial value if this state is encoutered for the first time.
+        # if action_value_dict == {}:
+        #     for action in self.joint_actions:
+        #         action_value_dict[action] = self.initial_value
+        # print "action_value_dict: "+ str(action_value_dict)
+        
+        if randint(1,100) * 0.01 >= self.epsilon:
             joint_action = random.choice(self.joint_actions)
         else:
             max_val = -1000
             joint_action = -1
             for action in self.joint_actions:
                 value = action_value_dict[action]
-                if value == {}:
-                    value = self.initial_value
-                    # TODO: also update state_action_pairs dict with this value?
                 if value > max_val:
                     max_val = value
                     joint_action = action
         self.new_joint_action = joint_action
 
-    def setReward(self):
-        """ Compute the current reward.
-        """
-        reward = 0
-        difference = self.score[0] - self.score[1]
-        """ Not used so far but maybe in the future.
-        lastDifference = observation.score[0] - observation.score[1]
-        """
 
-        roi = self.ROI["cp"] + self.ROI["am"]
-        if self.team == TEAM_RED:
-            if difference > 0:
-                reward = difference
-            else:
-                for userRegion in self.state.locations["regions"]:
-                    if userRegion in roi:
-                        reward += 1
-                        break
-        elif self.team == TEAM_BLUE:
-            if difference < 0:
-                reward = -difference
-            else:
-                for userRegion in self.state.locations["regions"]:
-                    if userRegion in roi:
-                        reward += 1
-                        break
-                        
+    # def setReward(self):
+    #     """ Compute the current reward.
+    #     """
+    #     reward = 0
+    #     difference = self.score[0] - self.score[1]
+    #     """ Not used so far but maybe in the future.
+    #     lastDifference = observation.score[0] - observation.score[1]
+    #     """
+
+    #     roi = self.ROI["cp"] + self.ROI["am"]
+    #     if self.team == TEAM_RED:
+    #         if difference > 0:
+    #             reward = difference
+    #         else:
+    #             for userRegion in self.state.locations["regions"]:
+    #                 if userRegion in roi:
+    #                     reward += 1
+    #                     break
+    #     elif self.team == TEAM_BLUE:
+    #         if difference < 0:
+    #             reward = -difference
+    #         else:
+    #             for userRegion in self.state.locations["regions"]:
+    #                 if userRegion in roi:
+    #                     reward += 1
+    #                     break
+
+    #     self.reward = reward
+
+    
+    def setReward(self):
+        difference = self.diff_score[0] if self.team == TEAM_RED else self.diff_score[1]
+        
+        if difference > 0:
+            reward = difference
+        else:
+            for agent_id, agentRegion in zip(self.friends, state.locations["regions"]):
+                if self.ammo[agent_id] > 0 and (agentRegion == 2 or agentRegion == 12):
+                    reward += 1
+                if self.ammo[agent_id] == 0 and (agentRegion == 2 or agentRegion == 12):
+                    reward -= 1
+
         self.reward = reward
+
 
     def update_policy(self, oldStateKey, newStateKey):
         """ Update the joint policy of the agents based on the current and the previous states and actions.
@@ -791,12 +942,10 @@ class JointObservation(object):
         return state
 
 
-
-
-
 ########################################################################
 ##### State class ######################################################
 ########################################################################
+
 class State(object):
 
     def __init__(self):
@@ -831,10 +980,10 @@ class State(object):
         return key
 
 
-
 ########################################################################
 ##### JointAction class ################################################
 ########################################################################
+
 class JoinAction(object):
 
     # Our strategies define the % of bots that go for certain goals.
@@ -917,38 +1066,6 @@ class JoinAction(object):
 								   "fa08"	: ("Agent1","am2","Agent2","am2","Agent3","am2")
 								  }
     '''
-							 
-    def __init__(self):
-        pass
-
-def transform_mesh(nav_mesh, max_speed=40, max_angle=math.pi/4):
-    """ Recomputes a new weight for each edge of the navigation mesh.
-        
-        Each start and end point of an edge and its weight is given to
-        mesh_transform, and its return value is stored in a new mesh.
-    """
-    return nav_mesh # Remove this line to activate the step-based mesh.
-    new_mesh = dict()
-    angles = list(frange(-math.pi, math.pi, max_angle))
-    for start in nav_mesh:
-        for angle in angles:
-            start_ = start + (angle,)
-            new_mesh[start_] = dict()
-            for angle_ in angles:
-                #new_mesh[start_][start+(angle_,)] = math.ceil(math.fabs(angle_fix(angle_-angle))/max_angle)
-                for end in nav_mesh[start]:
-                    new_mesh[start_][end+(angle_,)] = (point_dist(start,end)/max_speed) #calc_cost(start_,end+(angle_,),max_speed,max_angle)
-    return new_mesh
-
-def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
-    """Calculate the turns necessary to travel from node1 to node2
-    """
-    # If node1 is at the same spot as node2, simply return the angle difference
-    if node1[0:2] == node2[0:2]:
-        if len(node2)==2:
-            return 0
-        else:
-            return math.ceil(math.fabs(angle_fix(node2[2] - node1[2])) / max_angle)
     
     # Calculate the distance between the two nodes
     dx = node2[0] - node1[0]
