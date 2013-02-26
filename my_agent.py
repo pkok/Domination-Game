@@ -76,7 +76,9 @@ class Agent(object):
         self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
-        return self.get_action()
+        action = self.get_action()
+        self.joint_observation.register_goal(self.id, self.goal, action)
+        return action
 
     def set_goal_sarsa(self):
         """This function sets the goal for the agent.
@@ -98,6 +100,12 @@ class Agent(object):
         if self.goal is not None and point_dist(self.goal, self.obs.loc) < self.settings.tilesize:
             self.goal = None
         
+        # Drive to where the user clicked
+        # Clicked is a list of tuples of (x, y, shift_down, is_selected)
+        if self.selected and self.obs.clicked:
+            self.goal = self.obs.clicked[0][0:2]
+            return
+
         # Walk to ammo if it is closer than current goal
         ammopacks = filter(lambda x: x[2] == "Ammo", self.obs.objects)
         if ammopacks:
@@ -119,23 +127,14 @@ class Agent(object):
                                     self.mesh, self.grid, self.settings.tilesize)
                 if self.calc_path_length(ammo_path) < self.calc_path_length(goal_path):
                     self.goal = ammopacks[0][0:2]
+            return
 
         # If no current goal, follow some policy        
         if self.goal is None:
-
             # Initialise some handy parameters
-            cp1 = False
-            cp2 = False
-            if self.team == TEAM_RED:
-                if self.obs.cps[0][2] == 0:
-                    cp1 = True
-                if self.obs.cps[1][2] == 0:
-                    cp2 = True
-            elif self.team == TEAM_BLUE:
-                if self.obs.cps[0][2] == 1:
-                    cp1 = True
-                if self.obs.cps[1][2] == 1:
-                    cp2 = True
+            team = int(self.team == TEAM_BLUE)
+            cp1 = self.obs.cps[0][2] == team
+            cp2 = self.obs.cps[1][2] == team
 
             ammo_positions = [(152,136), (312,136)]
             
@@ -146,34 +145,23 @@ class Agent(object):
             
             # If no control points are controlled, walk to a random control point
             if not cp1 and not cp2:
-                self.goal = self.obs.cps[random.randint(0,len(self.obs.cps)-1)][0:2]
-            
+                self.goal = random.choice(self.obs.cps)[0:2]
             # If both control points are occupied and agent has no ammo, walk to a random ammo spawn
             elif cp1 and cp2 and self.obs.ammo == 0:
-                self.goal = ammo_positions[random.randint(0,len(ammo_positions)-1)]
-                
+                self.goal = random.choice(ammo_positions)
             # If agent is at a control point, walk to a random ammo spawn
             elif (at_cp1 or at_cp2):
-                self.goal = ammo_positions[random.randint(0,len(ammo_positions)-1)]
-            
+                self.goal = random.choice(ammo_positions)
             # If agent is at an ammo spawn, walk to a random uncontrolled control point
             elif at_ammo1 or at_ammo2:
                 self.goal = self.obs.cps[1][0:2] if cp1 else self.obs.cps[0][0:2]
-            
             # If one control point is occupied, walk to the other
             elif cp1 and not cp2:
                 self.goal = self.obs.cps[1][0:2]
             elif cp2 and not cp1:
                 self.goal = self.obs.cps[0][0:2]
-                
-            # If nothing applies, walk to a random control point
             else:
-                self.goal = self.obs.cps[random.randint(0,len(self.obs.cps)-1)][0:2]
-                    
-        # Drive to where the user clicked
-        # Clicked is a list of tuples of (x, y, shift_down, is_selected)
-        if self.selected and self.obs.clicked:
-            self.goal = self.obs.clicked[0][0:2]
+                self.goal = random.choice(self.obs.cps)[0:2]
     
     def calc_path_length(self, path):
         """This function calculates the length of a path in pixels
@@ -331,11 +319,17 @@ class Agent(object):
             if really_shootable:
                 shoot = True
                 best_dif = 100.0
+                # Compute minimal angle to rotate
                 for foe in really_shootable:
                     cur_dif = abs(path_angle - foe[2]) 
                     if cur_dif < best_dif:
                         best_dif = cur_dif
                         turn = foe[2]
+                        shoot = foe[0:2]
+                bullet_path = self.loc
+                # Compute which agent you shoot
+                for foe in really_shootable:
+                    pass
 
         return shoot, turn
     
@@ -491,8 +485,6 @@ def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi
         if not line_intersects_grid(start,n[0:2],grid,tilesize):
             start_list.append((n, calc_cost(start+(angle,),n,max_speed,max_angle)))
     mesh[start] = dict(start_list)
-    
-    print mesh[start]
     
     # Plan path
     neighbours = lambda n: mesh[n].keys()
@@ -679,6 +671,7 @@ class JointObservation(object):
         # Create a list of all possible joint actions
         interestRegions = self.ROI["cp"] + self.ROI["am"]
         self.joint_actions = list(product(interestRegions, repeat=self.number_of_agents))
+        self.chosen_goals = {} # agent_id: goal, action
         print "JointObservation.friends: " + str(self.friends)
         print "JointObservation.joint_actions: " + str(self.joint_actions)
 
@@ -693,6 +686,7 @@ class JointObservation(object):
             self.foes[self.step] = set()
             self.called_agents = set()
             self.featuresExtracted = False
+            self.chosen_goals = {}
 
         self.friends[agent_id] = AgentData(observation.loc[0], observation.loc[1],
                 observation.angle, observation.ammo, observation.collided,
@@ -733,6 +727,13 @@ class JointObservation(object):
 
             if self.old_state_key != -1:
                 self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
+
+    def register_goal(self, agent_id, goal, action):
+        self.chosen_goals[agent_id] = goal, action
+
+    
+    def goal_chosen(self, goal):
+        return filter(lambda x: x[0] != goal, self.chosen_goals.values())
 
 
     def chooseJointAction(self):
@@ -1066,23 +1067,3 @@ class JoinAction(object):
 								   "fa08"	: ("Agent1","am2","Agent2","am2","Agent3","am2")
 								  }
     '''
-    
-    # Calculate the distance between the two nodes
-    dx = node2[0] - node1[0]
-    dy = node2[1] - node1[1]
-    dist = math.ceil((dx**2 + dy**2)**0.5 / max_speed)
-
-    # Calculate the angle required to face the direction of node2
-    angle_dist1 = math.ceil(math.fabs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle)
-
-    # Calculate the angle required to face the direction specified by node2 after arriving
-    if len(node2) == 2:
-        angle_dist2 = 0
-    else:
-        angle_dist2 = math.ceil(math.fabs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle)
-    
-    # Then calculate the travel cost in turns
-    if angle_dist1 == 0:
-        return dist + angle_dist2
-    else:
-        return dist + angle_dist1 - 1 + angle_dist2
