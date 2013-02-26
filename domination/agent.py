@@ -106,7 +106,7 @@ class Agent(object):
                 if self.obs.cps[1][2] == 1:
                     cp2 = True
 
-            ammo_positions = [(152,136), (312,136)]
+            ammo_positions = [(168,168), (296,104)]
             
             at_cp1 = (point_dist(self.obs.cps[0][0:2], self.obs.loc) < self.settings.tilesize)
             at_cp2 = (point_dist(self.obs.cps[1][0:2], self.obs.loc) < self.settings.tilesize)
@@ -261,7 +261,7 @@ class Agent(object):
                     right_hit = False
                 # Check for friendly fire
                 for friendly in self.obs.friends:
-                    if left_hit and line_intersects_circ(self.obs.loc, right_coords, friendly, 6):
+                    if right_hit and line_intersects_circ(self.obs.loc, right_coords, friendly, 6):
                         right_hit = False
 
                 # Check optimal angle to shoot foe depending on which parts can be hit
@@ -372,7 +372,7 @@ class Agent(object):
             """
             # Draw line to goal along the planned path
             if self.goal is not None:
-                path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.tilesize)
+                path = find_path(self.obs.loc, self.goal, self.mesh, self.grid, self.settings.tilesize)
                 if path:
                     for i in range(len(path)):
                         if i == 0:

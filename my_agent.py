@@ -13,7 +13,6 @@ astar = astar.astar
 class Agent(object):
     
     NAME = "verfkwast"
-
     RADIUS = 6.0 # Radius in pixels of an agent.
     
     def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None, matchinfo=None, *args, **kwargs):
@@ -74,8 +73,8 @@ class Agent(object):
         """ 
         # TODO: Set the agent's goal to the given location in joint_observation
         # agent_action = self.joint_observation.joint_action[]
-        self.set_goal_sarsa()
-        #self.set_goal_hardcoded()
+        #self.set_goal_sarsa()
+        self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -249,7 +248,7 @@ class Agent(object):
                 left_coords = (foe[0]-dx_edge,foe[1]-dy_edge)
                 right_coords = (foe[0]+dx_edge,foe[1]+dy_edge)
                 edge_dist = ((dx+dx_edge)**2 + (dy+dy_edge)**2)**0.5
-                
+                        
                 # Check if center can be hit
                 cen_hit = True
                 # Check for angle
@@ -260,9 +259,8 @@ class Agent(object):
                     cen_hit = False
                 # Check for friendly fire
                 for friendly in self.obs.friends:
-                    if cen_hit and line_intersects_circ(self.obs.loc, foe[0:2], friendly, 6):
+                    if cen_hit and line_intersects_circ(self.obs.loc, foe[0:2], friendly, Agent.RADIUS*1.05):
                         cen_hit = False
-                
                 
                 # Check if left edge can be hit
                 left_hit = True
@@ -277,7 +275,7 @@ class Agent(object):
                     left_hit = False
                 # Check for friendly fire
                 for friendly in self.obs.friends:
-                    if left_hit and line_intersects_circ(self.obs.loc, left_coords, friendly, 6):
+                    if left_hit and line_intersects_circ(self.obs.loc, left_coords, friendly, Agent.RADIUS*1.05):
                         left_hit = False
 
                 # Check if right edge can be hit
@@ -293,7 +291,7 @@ class Agent(object):
                     right_hit = False
                 # Check for friendly fire
                 for friendly in self.obs.friends:
-                    if left_hit and line_intersects_circ(self.obs.loc, right_coords, friendly, 6):
+                    if right_hit and line_intersects_circ(self.obs.loc, right_coords, friendly, Agent.RADIUS*1.05):
                         right_hit = False
 
                 # Check optimal angle to shoot foe depending on which parts can be hit
