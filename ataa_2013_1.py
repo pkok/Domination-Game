@@ -26,7 +26,7 @@ w w w w w w w w w w w w w w w w w w w w w w w w w w w w w
 """
 
 class Tournament1(scenarios.Scenario):
-    REPEATS   = 1000
+    REPEATS   = 100
     GENERATOR = None
     FIELD     = core.Field.from_string(FIELD)
     SETTINGS  = core.Settings(max_steps=300,
@@ -44,4 +44,4 @@ if __name__ == "__main__":
         Tournament1.test(red="my_agent.py", blue="domination/agent.py")
     else:
         # This is what is used to run the tournament: 
-        Tournament1.tournament(agents=["my_agent.py", "domination/agent_controllable.py"], output_folder='_tmp')
+        Tournament1.tournament(agents=["my_agent.py", "domination/agent.py"], output_folder='_tmp')

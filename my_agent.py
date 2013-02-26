@@ -43,7 +43,7 @@ class Agent(object):
         self.blobpath = None
         
         # Read the binary blob, we're not using it though
-        if not self.joint_observation.state_action_pairs and blob is not None:
+        if (not self.joint_observation.state_action_pairs) and (blob is not None):
             # Remember the blob path so we can write back to it
             self.blobpath = blob.name
             self.joint_observation.state_action_pairs = pickle.loads(blob.read())
@@ -73,7 +73,7 @@ class Agent(object):
         # TODO: Set the agent's goal to the given location in joint_observation
         # agent_action = self.joint_observation.joint_action[]
         # self.set_goal_sarsa()
-        self.set_goal_hardcoded()
+        self.set_goal_sarsa()
         
         # Compute and return the corresponding action
         return self.get_action()
@@ -82,7 +82,6 @@ class Agent(object):
         """This function sets the goal for the agent.
         """
         index = sorted(self.joint_observation.friends.keys()).index(self.id)
-        print "self.joint_observation.new_joint_action: " + str(self.joint_observation.new_joint_action)
         goal_region = self.joint_observation.new_joint_action[index]
         self.goal = self.joint_observation.coords[goal_region]
 
@@ -434,6 +433,7 @@ class Agent(object):
                 # your learned data.
                 blobfile = open(self.blobpath, 'wb')
                 pickle.dump(self.joint_observation.state_action_pairs, blobfile, pickle.HIGHEST_PROTOCOL)
+                print "Blob saved.\n"
             except:
                 # We can't write to the blob, this is normal on AppEngine since
                 # we don't have filesystem access there.        
@@ -484,7 +484,7 @@ def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi
             start_list.append((n, calc_cost(start+(angle,),n,max_speed,max_angle)))
     mesh[start] = dict(start_list)
     
-    print mesh[start]
+    # print mesh[start]
     
     # Plan path
     neighbours = lambda n: mesh[n].keys()
