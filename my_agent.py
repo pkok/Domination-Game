@@ -72,8 +72,8 @@ class Agent(object):
         """ 
         # TODO: Set the agent's goal to the given location in joint_observation
         # agent_action = self.joint_observation.joint_action[]
-        # self.set_goal_sarsa()
         self.set_goal_sarsa()
+        #self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -331,8 +331,8 @@ class Agent(object):
                 bullet_path = point_mul(bullet_path, self.settings.max_range)
                 t = 1.0
                 for foe in really_shootable:
-                    t_ = line_intersects_circ(self.obs.loc, bullet_path, foe[0:2], 6.0)[0]
-                    if t_ < t:
+                    t_ = line_intersects_circ(self.obs.loc, bullet_path, foe[0:2], 6.0)
+                    if t_ and t_[0] < t:
                         t = t_
                         shoot = foe[0:2]
 
