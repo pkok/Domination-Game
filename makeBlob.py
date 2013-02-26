@@ -12,7 +12,6 @@ class AutoVivification(dict):
 
 
 if __name__ == "__main__":
-	# state_action_pairs = AutoVivification()
-	state_action_pairs = defaultdict()
+	state_action_pairs = {}
 	blobfile = open("my_agent_blob", 'wb')
 	pickle.dump(state_action_pairs, blobfile, pickle.HIGHEST_PROTOCOL)
