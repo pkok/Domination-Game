@@ -33,11 +33,11 @@ w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
 w _ _ _ _ _ _ _ _ _ _ _ _ _ C _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
 w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
 w _ _ _ _ _ _ _ w w w w w w w w w w w w w w w _ _ _ _ _ _ _ w
-w _ _ _ w _ _ _ w _ _ _ _ _ _ _ _ _ _ a _ _ _ _ _ _ w _ _ _ w
+w _ _ _ w _ _ _ w _ _ _ _ _ _ _ _ _ _ A _ _ _ _ _ _ w _ _ _ w
 w R _ _ w _ _ _ w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w _ _ B w
 w R _ _ w _ _ _ w _ _ _ _ w w w w w _ _ _ _ w _ _ _ w _ _ B w
 w R _ _ w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w _ _ _ w _ _ B w
-w _ _ _ w _ _ _ _ _ _ a _ _ _ _ _ _ _ _ _ _ w _ _ _ w _ _ _ w
+w _ _ _ w _ _ _ _ _ _ A _ _ _ _ _ _ _ _ _ _ w _ _ _ w _ _ _ w
 w _ _ _ _ _ _ _ w w w w w w w w w w w w w w w _ _ _ _ _ _ _ w
 w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
 w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ C _ _ _ _ _ _ _ _ _ _ _ _ _ w
@@ -83,7 +83,7 @@ class Tournament2(scenarios.Scenario):
 if __name__ == '__main__':
     # TODO: use argparse to set rendered true/false
     if len(sys.argv) == 1:
-        Tournament2.test(red="domination/agent.py", blue="domination/agent.py")
+        Tournament2.test(red="my_agent.py", blue="domination/agent.py")
     else:
         now = datetime.datetime.now()
         folder = os.path.join('tournaments', now.strftime("%Y%m%d-%H%M"))
