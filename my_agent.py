@@ -13,6 +13,8 @@ astar = astar.astar
 class Agent(object):
     
     NAME = "verfkwast"
+
+    RADIUS = 6.0 # Radius in pixels of an agent.
     
     def __init__(self, id, team, settings=None, field_rects=None, field_grid=None, nav_mesh=None, blob=None, matchinfo=None, *args, **kwargs):
         """ Each agent is initialized at the beginning of each game.
@@ -225,7 +227,7 @@ class Agent(object):
                 cen_dist = (dx**2 + dy**2)**0.5
                 
                 if (abs(cen_angle) <= (self.settings.max_turn + math.pi/6) and 
-                    cen_dist <= (self.settings.max_range + 6.0)):
+                    cen_dist <= (self.settings.max_range + Agent.RADIUS)):
                     approx_shootable.append((foe[0],foe[1],cen_angle,cen_dist,dx,dy))
             
             # Check for obstruction and compute best shooting angle per foe
@@ -235,8 +237,8 @@ class Agent(object):
                 dx = foe[4]
                 dy = foe[5]
                 edge_angle = (math.pi/2)-math.asin(dx/foe[3])
-                dx_edge = math.sin(edge_angle)*6.0*0.85
-                dy_edge = math.cos(edge_angle)*6.0*0.85
+                dx_edge = math.sin(edge_angle)* Agent.RADIUS * 0.85
+                dy_edge = math.cos(edge_angle)* Agent.RADIUS * 0.85
                 if dy > 0:
                     dx_edge = -dx_edge
  
@@ -330,7 +332,7 @@ class Agent(object):
                 bullet_path = point_mul(bullet_path, self.settings.max_range)
                 t = 1.0
                 for foe in really_shootable:
-                    t_ = line_intersects_circ(self.obs.loc, bullet_path, foe[0:2], 6.0)
+                    t_ = line_intersects_circ(self.obs.loc, bullet_path, foe[0:2], Agent.RADIUS)
                     if t_ and t_[0] < t:
                         t = t_
                         shoot = foe[0:2]
@@ -733,12 +735,27 @@ class JointObservation(object):
             if self.old_state_key != -1:
                 self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
 
+
     def register_goal(self, agent_id, goal, action):
+        """ Register the goal and action of agents.
+            This information can be retrieved through
+              - JointObservation.goal_chosen(goal) -> bool
+              - JointObservation.shooting_at_foe(foe_loc) -> bool
+            for agents to decide which action to take.
+        """
         self.chosen_goals[agent_id] = goal, action
+    
+
+    def goal_chosen(self, goal):
+        """ Check if an other agent is moving towards the same goal.
+        """
+        return any(lambda x: x[0] == goal, self.chosen_goals.values())
 
     
-    def goal_chosen(self, goal):
-        return any(lambda x: x[0] != goal, self.chosen_goals.values())
+    def shooting_at_foe(self, foe_location):
+        """ Check if an other agent has already targeted a foe to shoot at.
+        """
+        return any(lambda x: x[1][2] == foe_location, self.chosen_goals.values())
 
 
     def chooseJointAction(self):
