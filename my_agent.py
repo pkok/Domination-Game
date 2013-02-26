@@ -325,7 +325,7 @@ class Agent(object):
                         best_dif = cur_dif
                         turn = foe[2]
                         shoot = foe[0:2]
-                bullet_path = self.loc
+                # bullet_path = self.loc
                 # Compute which agent you shoot
                 for foe in really_shootable:
                     pass
