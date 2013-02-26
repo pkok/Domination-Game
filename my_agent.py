@@ -431,7 +431,7 @@ class Agent(object):
                 # We simply write the same content back into the blob.
                 # in a real situation, the new blob would include updates to 
                 # your learned data.
-                blobfile = open(self.blobpath, 'wb')
+                blobfile = open(self.blobpath + "_output", 'wb')
                 pickle.dump(self.joint_observation.state_action_pairs, blobfile, pickle.HIGHEST_PROTOCOL)
                 print "Blob saved.\n"
             except:
