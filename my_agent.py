@@ -61,10 +61,10 @@ class Agent(object):
         """
         self.obs = observation
         self.selected = observation.selected
-        #start_time = time.time()
+        
+        start_time = time.time()
         self.joint_observation.update(self.id, observation)
-        #elapsed = time.time() - start_time
-        #print elapsed
+        print time.time() - start_time
         
         if observation.selected:
             print observation
@@ -120,13 +120,13 @@ class Agent(object):
 
             if self.goal is None:
                 self.goal = ammopacks[0][0:2]
-            else:
-                goal_path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
-                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
-                ammo_path = our_find_path(self.obs.loc, self.obs.angle, ammopacks[0][0:2], self.mesh, self.grid,
-                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
-                if self.calc_path_length(ammo_path) < self.calc_path_length(goal_path):
-                    self.goal = ammopacks[0][0:2]
+#            else:
+#                goal_path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
+#                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
+#                ammo_path = our_find_path(self.obs.loc, self.obs.angle, ammopacks[0][0:2], self.mesh, self.grid,
+#                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
+#                if self.calc_path_length(ammo_path) < self.calc_path_length(goal_path):
+#                    self.goal = ammopacks[0][0:2]
             return
 
         # If no current goal, follow some policy        
@@ -446,6 +446,10 @@ def transform_mesh(nav_mesh, grid, tilesize, max_speed=40, max_angle=math.pi/4):
     """
     interest_points = {'cp1':(232, 56), 'cp2':(264, 216), 'am1':(184,168), 'am2':(312,104)}
     
+    # Add interest points to mesh
+    for point in interest_points:
+        nav_mesh[interest_points[point]] = 0
+    
     # Interconnect all points that may be connected in the original mesh
     full_mesh = {}
     for start in nav_mesh:
@@ -456,26 +460,22 @@ def transform_mesh(nav_mesh, grid, tilesize, max_speed=40, max_angle=math.pi/4):
     
     # Add in angles and calculate new cost for transitions
     new_mesh = {}
-    angles = list(frange(-math.pi, math.pi, max_angle))
+    angles = list(frange(-math.pi, math.pi, max_angle*(8/6.0)))
     for start in full_mesh:
         for angle in angles:
             start_ = start + (angle,)
             new_mesh[start_] = {}
             for angle_ in angles:
-                for end in nav_mesh[start]:
-                    new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)            
+                for end in full_mesh[start]:
+                    new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)
     
-    # Add interest points without angles
-#    for point in interest_points:
-#        pt = interest_points[point]
-#        if not line_intersects_grid(start,pt,grid,tilesize):
-#            new_mesh[start_][pt] = calc_cost(start_,pt,max_speed,max_angle)
     return new_mesh
 
 def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
     """ Uses astar to find a path from start to end,
         using the given mesh and tile grid.
     """
+    
     # If there is a straight line, just return the end point
     if not line_intersects_grid(start, end, grid, tilesize):
         return [end]
@@ -558,36 +558,25 @@ def find_all_paths(start, angle, mesh, grid, max_speed=40, max_angle=math.pi/4, 
     
     path_dict = {}
     for end_point in ends:
-        end = ends[end_point]
+        end = ends[end_point]              
+        
         # If there is a straight line, just return the end point
         if not line_intersects_grid(start, end, grid, tilesize):
             path_dict[end_point] = ([end], calc_cost(start+(angle,),end,max_speed,max_angle))
         else:
-            # Add temp nodes for end:
-            end_list = []
-            for n in mesh:
-                if (not line_intersects_grid(end,n[0:2],grid,tilesize)) and len(n) == 3: #HACK, Why is this needed?
-                    end_list.append((n, calc_cost(n,end,max_speed,max_angle)))
-            for n, cost in end_list:
-                mesh[n][end] = cost
-            
             # Plan path
             neighbours = lambda n: mesh[n].keys()
             cost       = lambda n1, n2: mesh[n1][n2]
-            goal       = lambda n: n == end
+            goal       = lambda n: n == end+(0.0,)
             heuristic  = lambda n: ((n[0]-end[0])**2 + (n[1]-end[1])**2)**0.5 / max_speed
             nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
             
             # Save path
             path_dict[end_point] = (nodes, length)
-            
-            # Remove temp nodes for end
-            for n in mesh:
-                if mesh[n].has_key(end):
-                    del mesh[n][end]
         
     # Remove temp nodes for start and end from mesh
     del mesh[start]
+    print '\r\n'
 
     # Return path dictionary
     return path_dict
