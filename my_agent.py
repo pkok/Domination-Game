@@ -77,10 +77,11 @@ class Agent(object):
         # agent_action = self.joint_observation.joint_action[]
         #self.set_goal_sarsa()
         self.set_goal_hardcoded()
+        self.joint_observation.update_goal(self.id, self.goal)
         
         # Compute and return the corresponding action
         action = self.get_action()
-        self.joint_observation.register_goal(self.id, self.goal, action)
+        self.joint_observation.update_action(self.id, action)
         return action
 
     def set_goal_sarsa(self):
@@ -176,9 +177,9 @@ class Agent(object):
         """This function returns the action tuple for the agent.
         """
         #interest_points = {'cp1':(216, 56), 'cp2':(248, 216), 'am1':(168, 168), 'am2':(296, 104)}
-        if self.goal == (216,56):
+        if self.goal == (232,56):
             path = self.joint_observation.paths[self.id]['cp1'][0]
-        elif self.goal == (248, 216):
+        elif self.goal == (264, 216):
             path = self.joint_observation.paths[self.id]['cp2'][0]
         elif self.goal == (184, 168):
             path = self.joint_observation.paths[self.id]['am1'][0]
@@ -443,7 +444,7 @@ def transform_mesh(nav_mesh, grid, tilesize, max_speed=40, max_angle=math.pi/4):
         Each start and end point of an edge and its weight is given to
         mesh_transform, and its return value is stored in a new mesh.
     """
-    interest_points = {'cp1':(216, 56), 'cp2':(248, 216), 'am1':(184,168), 'am2':(312,104)}
+    interest_points = {'cp1':(232, 56), 'cp2':(264, 216), 'am1':(184,168), 'am2':(312,104)}
     
     # Interconnect all points that may be connected in the original mesh
     full_mesh = {}
@@ -546,7 +547,7 @@ def find_all_paths(start, angle, mesh, grid, max_speed=40, max_angle=math.pi/4, 
     """ Uses astar to find a path from start to each point in end,
         using the given mesh and tile grid.
     """
-    ends = {'cp1':(216, 56), 'cp2':(248, 216), 'am1':(184,168), 'am2':(312,104)}
+    ends = {'cp1':(232, 56), 'cp2':(264, 216), 'am1':(184,168), 'am2':(312,104)}
     
     # Add temp nodes for start
     start_list = []
@@ -561,12 +562,13 @@ def find_all_paths(start, angle, mesh, grid, max_speed=40, max_angle=math.pi/4, 
         # If there is a straight line, just return the end point
         if not line_intersects_grid(start, end, grid, tilesize):
             path_dict[end_point] = ([end], calc_cost(start+(angle,),end,max_speed,max_angle))
-
         else:
             # Add temp nodes for end:
-            endconns = [(n, calc_cost(n,end,max_speed,max_angle)) for n in mesh 
-                        if not line_intersects_grid(end,n[0:2],grid,tilesize)]
-            for n, cost in endconns:
+            end_list = []
+            for n in mesh:
+                if (not line_intersects_grid(end,n[0:2],grid,tilesize)) and len(n) == 3: #HACK, Why is this needed?
+                    end_list.append((n, calc_cost(n,end,max_speed,max_angle)))
+            for n, cost in end_list:
                 mesh[n][end] = cost
             
             # Plan path
@@ -669,7 +671,7 @@ class JointObservation(object):
         self.ROI = {"cp": (2, 12), "am": (6,8), "rest": (0,1,3,4,5,9,10,11,13,14)}
  
         # coordinate list [2, 6, 8, 12]
-        self.coordlist = [(216, 56), (184, 168), (312, 104), (248, 216)]
+        self.coordlist = [(232, 56), (184, 168), (312, 104), (264, 216)]
         
         # Switch the regions around when we start on the other side of the screen
         if self.team == TEAM_BLUE:
@@ -729,9 +731,10 @@ class JointObservation(object):
         
         # Keep track of paths to interest points for each agent at each timestep
         self.paths = {} # agent_id: {'cp1':(path,length), ..}
-        
+        # Keep track of actions from other agents during each timestep
+        self.actions = {} # agent_id: (turn, speed, shoot)
         # Keep track of goals actions by agents
-        self.chosen_goals = {} # agent_id: goal, action
+        self.goals = {} # agent_id: goal
 
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
@@ -793,22 +796,31 @@ class JointObservation(object):
                                         self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
         
 
+    def update_action(self, agent_id, action_tuple):
+        if agent_id == (self.number_of_agents - 1):
+            self.actions = {}
+        else:
+            self.actions[agent_id] = action_tuple
 
-    def register_goal(self, agent_id, goal, action):
+    def update_goal(self, agent_id, goal):
         """ Register the goal and action of agents.
             This information can be retrieved through
               - JointObservation.goal_chosen(goal) -> bool
               - JointObservation.shooting_at_foe(foe_loc) -> bool
             for agents to decide which action to take.
         """
-        self.chosen_goals[agent_id] = goal, action
-    
+        if agent_id == (self.number_of_agents - 1):
+            self.goals = {}
+        else:
+            self.goals[agent_id] = goal
 
     def goal_chosen(self, goal):
         """ Check if an other agent is moving towards the same goal.
         """
-        return any(lambda x: x[0] == goal, self.chosen_goals.values())
-
+        for agent in self.goals:
+            if self.goals[agent] == goal:
+                return True
+        return False
     
     def shooting_at_foe(self, foe_location):
         """ Check if an other agent has already targeted a foe to shoot at.
