@@ -39,7 +39,6 @@ class Agent(object):
         self.goal = None
         self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
         self.selected = False
-        self.allow_reverse_gear = False
 
         self.blobpath = None
         
@@ -62,7 +61,10 @@ class Agent(object):
         """
         self.obs = observation
         self.selected = observation.selected
+        #start_time = time.time()
         self.joint_observation.update(self.id, observation)
+        #elapsed = time.time() - start_time
+        #print elapsed
         
         if observation.selected:
             print observation
@@ -117,9 +119,6 @@ class Agent(object):
 
             if self.goal is None:
                 self.goal = ammopacks[0][0:2]
-                if (abs(ammo_dist) <= 3 * self.settings.max_speed and
-                    abs(ammo_angle_reverse) < self.settings.max_turn):
-                    self.allow_reverse_gear = True
             else:
                 goal_path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
                                         self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
@@ -136,7 +135,7 @@ class Agent(object):
             cp1 = self.obs.cps[0][2] == team
             cp2 = self.obs.cps[1][2] == team
 
-            ammo_positions = [(168,168), (296,104)]
+            ammo_positions = [(184,168), (312,104)]
             
             at_cp1 = (point_dist(self.obs.cps[0][0:2], self.obs.loc) < self.settings.tilesize)
             at_cp2 = (point_dist(self.obs.cps[1][0:2], self.obs.loc) < self.settings.tilesize)
@@ -176,29 +175,29 @@ class Agent(object):
     def get_action(self):
         """This function returns the action tuple for the agent.
         """
-        # Compute path and angle to path
-        path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
+        #interest_points = {'cp1':(216, 56), 'cp2':(248, 216), 'am1':(168, 168), 'am2':(296, 104)}
+        if self.goal == (216,56):
+            path = self.joint_observation.paths[self.id]['cp1'][0]
+        elif self.goal == (248, 216):
+            path = self.joint_observation.paths[self.id]['cp2'][0]
+        elif self.goal == (184, 168):
+            path = self.joint_observation.paths[self.id]['am1'][0]
+        elif self.goal == (312, 104):
+            path = self.joint_observation.paths[self.id]['am2'][0]
+        else:
+            # Compute path and angle to path
+            path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
+                                self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
         if path:
             dx = path[0][0] - self.obs.loc[0]
             dy = path[0][1] - self.obs.loc[1]
-            path_angle_forward = angle_fix(math.atan2(dy, dx) - self.obs.angle)
-            path_angle_reverse = angle_fix(path_angle_forward - math.pi)
+            path_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
             path_dist = (dx**2 + dy**2)**0.5
-
-            if (abs(path_angle_reverse) < abs(path_angle_forward) and
-                    False and # Remove this line to enable reverse gear
-                    (self.allow_reverse_gear or not self.obs.ammo)):
-                speed = -1
-                path_angle = -path_angle_reverse
-                self.allow_reverse_gear = False
-            else:
-                speed = 1
-                path_angle = path_angle_forward
 
             # Compute shoot and turn
             shoot, turn = self.compute_shoot(path_angle)
             # Compute speed
-            speed *= self.compute_speed(turn, path_dist)
+            speed = self.compute_speed(turn, path_dist)
 
         # If no path was found, do nothing
         else:
@@ -287,7 +286,7 @@ class Agent(object):
                 if abs(right_angle) > self.settings.max_turn:
                     right_hit = False
                 # Check for walls
-                if line_intersects_grid(self.obs.loc, right_coords, self.grid, self.settings.tilesize):
+                if right_hit and line_intersects_grid(self.obs.loc, right_coords, self.grid, self.settings.tilesize):
                     right_hit = False
                 # Check for friendly fire
                 for friendly in self.obs.friends:
@@ -324,7 +323,8 @@ class Agent(object):
                     if cur_dif < best_dif:
                         best_dif = cur_dif
                         turn = foe[2]
-                # Compute which agent you shoot
+                
+                # Compute which agent you will hit
                 bullet_angle = turn + self.obs.angle
                 bullet_path = (math.cos(bullet_angle), math.sin(bullet_angle))
                 bullet_path = point_mul(bullet_path, self.settings.max_range)
@@ -395,21 +395,7 @@ class Agent(object):
         import pygame
         # First agent clears the screen
         if self.id == 0:
-            surface.fill((0,0,0,0))
-
-        """
-        # Draw the agent field of vision and max shooting range
-        fov_rect = pygame.Rect(self.obs.loc[0] - (self.settings.max_see),
-                                self.obs.loc[1] - (self.settings.max_see),
-                                2 * self.settings.max_see,
-                                2 * self.settings.max_see)
-                               
-        pygame.draw.rect(surface, (0,0,255), fov_rect, 1)
-        
-        pygame.draw.circle(surface, (255,0,0,90), self.obs.loc, self.settings.max_range) 
-"""
-       
-
+            surface.fill((0,0,0,0))    
         
         # Selected agents draw their info
         if self.selected:
@@ -457,6 +443,9 @@ def transform_mesh(nav_mesh, grid, tilesize, max_speed=40, max_angle=math.pi/4):
         Each start and end point of an edge and its weight is given to
         mesh_transform, and its return value is stored in a new mesh.
     """
+    interest_points = {'cp1':(216, 56), 'cp2':(248, 216), 'am1':(184,168), 'am2':(312,104)}
+    
+    # Interconnect all points that may be connected in the original mesh
     full_mesh = {}
     for start in nav_mesh:
         full_mesh[start] = {}
@@ -464,6 +453,7 @@ def transform_mesh(nav_mesh, grid, tilesize, max_speed=40, max_angle=math.pi/4):
             if not line_intersects_grid(start, end, grid, tilesize):
                 full_mesh[start][end] = 0
     
+    # Add in angles and calculate new cost for transitions
     new_mesh = {}
     angles = list(frange(-math.pi, math.pi, max_angle))
     for start in full_mesh:
@@ -471,9 +461,14 @@ def transform_mesh(nav_mesh, grid, tilesize, max_speed=40, max_angle=math.pi/4):
             start_ = start + (angle,)
             new_mesh[start_] = {}
             for angle_ in angles:
-                #new_mesh[start_][start+(angle_,)] = math.ceil(abs(angle_fix(angle_-angle))/max_angle)
                 for end in nav_mesh[start]:
-                    new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)
+                    new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)            
+    
+    # Add interest points without angles
+#    for point in interest_points:
+#        pt = interest_points[point]
+#        if not line_intersects_grid(start,pt,grid,tilesize):
+#            new_mesh[start_][pt] = calc_cost(start_,pt,max_speed,max_angle)
     return new_mesh
 
 def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
@@ -516,8 +511,10 @@ def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi
 def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
     """Calculate the turns necessary to travel from node1 to node2
     """
-    #return point_dist(node1,node2) / max_speed# Remove this line to activate the step-based mesh.
-    
+    #return point_dist(node1,node2) / max_speed # Uncomment to switch to distance-based mesh
+    if len(node1) < 3:
+        print node1
+        print node2
     # If node1 is at the same spot as node2, simply return the angle difference
     if node1[0:2] == node2[0:2]:
         if len(node2)==2:
@@ -544,6 +541,54 @@ def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
         return dist + angle_dist2
     else:
         return dist + angle_dist1 - 1 + angle_dist2
+
+def find_all_paths(start, angle, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
+    """ Uses astar to find a path from start to each point in end,
+        using the given mesh and tile grid.
+    """
+    ends = {'cp1':(216, 56), 'cp2':(248, 216), 'am1':(184,168), 'am2':(312,104)}
+    
+    # Add temp nodes for start
+    start_list = []
+    for n in mesh:
+        if not line_intersects_grid(start,n[0:2],grid,tilesize):
+            start_list.append((n, calc_cost(start+(angle,),n,max_speed,max_angle)))
+    mesh[start] = dict(start_list)
+    
+    path_dict = {}
+    for end_point in ends:
+        end = ends[end_point]
+        # If there is a straight line, just return the end point
+        if not line_intersects_grid(start, end, grid, tilesize):
+            path_dict[end_point] = ([end], calc_cost(start+(angle,),end,max_speed,max_angle))
+
+        else:
+            # Add temp nodes for end:
+            endconns = [(n, calc_cost(n,end,max_speed,max_angle)) for n in mesh 
+                        if not line_intersects_grid(end,n[0:2],grid,tilesize)]
+            for n, cost in endconns:
+                mesh[n][end] = cost
+            
+            # Plan path
+            neighbours = lambda n: mesh[n].keys()
+            cost       = lambda n1, n2: mesh[n1][n2]
+            goal       = lambda n: n == end
+            heuristic  = lambda n: ((n[0]-end[0])**2 + (n[1]-end[1])**2)**0.5 / max_speed
+            nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
+            
+            # Save path
+            path_dict[end_point] = (nodes, length)
+            
+            # Remove temp nodes for end
+            for n in mesh:
+                if mesh[n].has_key(end):
+                    del mesh[n][end]
+        
+    # Remove temp nodes for start and end from mesh
+    del mesh[start]
+
+    # Return path dictionary
+    return path_dict
 
 
 ########################################################################
@@ -584,7 +629,7 @@ class JointObservation(object):
     def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents):
         
         self.team = team        
-        # keeping it the same while I don't have a correct function. - P.
+        self.grid = grid
         self.mesh = transform_mesh(nav_mesh, grid, settings.tilesize, settings.max_speed, settings.max_turn)
         self.state_action_pairs = {}
         self.epsilon = epsilon
@@ -624,8 +669,8 @@ class JointObservation(object):
         self.ROI = {"cp": (2, 12), "am": (6,8), "rest": (0,1,3,4,5,9,10,11,13,14)}
  
         # coordinate list [2, 6, 8, 12]
-        self.coordlist = [(216, 56), (152, 136), (312, 136), (248, 216)]
-
+        self.coordlist = [(216, 56), (184, 168), (312, 104), (248, 216)]
+        
         # Switch the regions around when we start on the other side of the screen
         if self.team == TEAM_BLUE:
             self.regions.reverse()
@@ -656,9 +701,6 @@ class JointObservation(object):
         # Objects seen by the agents, together with the last time seen.
         self.objects = defaultdict(lambda: [-1, -1]) # (x, y, type): last_seen, disappeared_since
         # Walls that can be seen by the agents
-        # Patrick's NOTE: How is this interesting when agents have access to
-        #                 the map?
-        # Stijn's NOTE: Probably used for line_intersect methods? No clue otherwise.
         self.walls = defaultdict(set) # (x, y): {agent_id, ...}
 
         # Current game score, and the difference with the score at the last
@@ -682,10 +724,14 @@ class JointObservation(object):
         # Create a list of all possible joint actions
         interestRegions = self.ROI["cp"] + self.ROI["am"]
         self.joint_actions = list(product(interestRegions, repeat=self.number_of_agents))
-        self.chosen_goals = {} # agent_id: goal, action
         print "JointObservation.friends: " + str(self.friends)
         print "JointObservation.joint_actions: " + str(self.joint_actions)
-
+        
+        # Keep track of paths to interest points for each agent at each timestep
+        self.paths = {} # agent_id: {'cp1':(path,length), ..}
+        
+        # Keep track of goals actions by agents
+        self.chosen_goals = {} # agent_id: goal, action
 
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
@@ -698,6 +744,7 @@ class JointObservation(object):
             self.called_agents = set()
             self.featuresExtracted = False
             self.chosen_goals = {}
+            self.paths = {}
 
         self.friends[agent_id] = AgentData(observation.loc[0], observation.loc[1],
                 observation.angle, observation.ammo, observation.collided,
@@ -738,6 +785,13 @@ class JointObservation(object):
 
             if self.old_state_key != -1:
                 self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
+        
+        # Update the paths
+        if agent_id == 0:
+            self.paths = {}
+        self.paths[agent_id] = find_all_paths(observation.loc, observation.angle, self.mesh, self.grid,
+                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
+        
 
 
     def register_goal(self, agent_id, goal, action):

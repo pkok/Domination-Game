@@ -42,11 +42,6 @@ class Agent(object):
             # Reset the file so other agents can read it too.
             blob.seek(0) 
         """
-        
-        # Recommended way to share variables between agents.
-        if id == 0:
-            self.all_agents = self.__class__.all_agents = []
-        self.all_agents.append(self)
 
     def observe(self, observation):
         """ Each agent is passed an observation using this function,
@@ -386,16 +381,4 @@ class Agent(object):
             interrupt (CTRL+C) by the user. Use it to
             store any learned variables and write logs/reports.
         """
-        """Blob handling
-        if self.id == 0 and self.blobpath is not None:
-            try:
-                # We simply write the same content back into the blob.
-                # in a real situation, the new blob would include updates to 
-                # your learned data.
-                blobfile = open(self.blobpath, 'wb')
-                pickle.dump(self.blobcontent, blobfile, pickle.HIGHEST_PROTOCOL)
-            except:
-                # We can't write to the blob, this is normal on AppEngine since
-                # we don't have filesystem access there.        
-                print "Agent %s can't write blob." % self.callsign
-        """
+        pass
