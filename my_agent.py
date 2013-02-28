@@ -221,6 +221,7 @@ class Agent(object):
         if self.obs.ammo > 0 and self.obs.foes:
             # Calculate which foes are roughly within a possible angle or distance to shoot
             approx_shootable = []
+            targeted_foes = self.joint_observation.targeted_foes()
             for foe in self.obs.foes:
                 # Calculate angle and distance to center of foe
                 dx = foe[0] - self.obs.loc[0]
@@ -319,25 +320,25 @@ class Agent(object):
             
             # Shoot the foe that requires the agent to deviate from its path the least
             if really_shootable:
-                shoot = True
-                best_dif = 100.0
+                best_difference = 100.0
                 # Compute minimal angle to rotate
                 for foe in really_shootable:
-                    cur_dif = abs(path_angle - foe[2]) 
-                    if cur_dif < best_dif:
-                        best_dif = cur_dif
+                    current_difference = abs(path_angle - foe[2]) 
+                    if current_difference < best_difference:
+                        best_difference = current_difference
                         turn = foe[2]
+                        shoot = foe[:2]
                 
                 # Compute which agent you will hit
                 bullet_angle = turn + self.obs.angle
                 bullet_path = (math.cos(bullet_angle), math.sin(bullet_angle))
                 bullet_path = point_mul(bullet_path, self.settings.max_range)
-                t = 1.0
+                smallest_distance = 1.0
                 for foe in really_shootable:
-                    t_ = line_intersects_circ(self.obs.loc, bullet_path, foe[0:2], Agent.RADIUS)
-                    if t_ and t_[0] < t:
-                        t = t_
-                        shoot = foe[0:2]
+                    intersection = line_intersects_circ(self.obs.loc, bullet_path, foe[0:2], Agent.RADIUS)
+                    if intersection and intersection[0] < smallest_distance:
+                        smallest_distance = t_[0]
+                        shoot = foe[:2]
         
         return shoot, turn
     
@@ -789,16 +790,20 @@ class JointObservation(object):
         
 
     def update_action(self, agent_id, action_tuple):
+        """ Register the chosen action of agents.  This information can be
+            retrieved through methods such as:
+              - JointObservation.targeted_foes() -> list of foe locations
+            for agents to decide which action to take.
+        """
         if agent_id == (self.number_of_agents - 1):
             self.actions = {}
         else:
             self.actions[agent_id] = action_tuple
 
     def update_goal(self, agent_id, goal):
-        """ Register the goal and action of agents.
-            This information can be retrieved through
+        """ Register the goal of agents.  This information can be retrieved
+            through methods such as:
               - JointObservation.goal_chosen(goal) -> bool
-              - JointObservation.shooting_at_foe(foe_loc) -> bool
             for agents to decide which action to take.
         """
         if agent_id == (self.number_of_agents - 1):
@@ -814,10 +819,10 @@ class JointObservation(object):
                 return True
         return False
     
-    def shooting_at_foe(self, foe_location):
-        """ Check if an other agent has already targeted a foe to shoot at.
+    def targeted_foes(self):
+        """ A list of foes that are targeted to be shot.
         """
-        return any(lambda x: x[1][2] == foe_location, self.chosen_goals.values())
+        return filter(lambda x: type(x[2]) is tuple, self.actions.values())
 
 
     def chooseJointAction(self):
