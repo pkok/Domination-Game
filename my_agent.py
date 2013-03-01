@@ -127,9 +127,9 @@ class Agent(object):
             if self.goal is None:
                 self.goal = ammopacks[0][0:2]
 #            else:
-#                goal_path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
+#                goal_path = find_single_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
 #                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
-#                ammo_path = our_find_path(self.obs.loc, self.obs.angle, ammopacks[0][0:2], self.mesh, self.grid,
+#                ammo_path = find_single_path(self.obs.loc, self.obs.angle, ammopacks[0][0:2], self.mesh, self.grid,
 #                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
 #                if self.calc_path_length(ammo_path) < self.calc_path_length(goal_path):
 #                    self.goal = ammopacks[0][0:2]
@@ -188,7 +188,7 @@ class Agent(object):
 
         if path is None:
             # Compute path and angle to path
-            path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
+            path = find_single_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
                                 self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
         if path:
             dx = path[0][0] - self.obs.loc[0]
@@ -409,8 +409,16 @@ class Agent(object):
                 pygame.draw.line(surface,(0,0,0),self.obs.loc, self.goal)
             """
             # Draw line to goal along the planned path
+
+                                
             if self.goal is not None:
-                path = our_find_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid, self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
+                for ip in Agent.INTEREST_POINTS:
+                    if self.goal == Agent.INTEREST_POINTS[ip]:
+                        path = self.joint_observation.paths[self.id][ip][0]
+                if path is None:
+                    # Compute path and angle to path
+                    path = find_single_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
+                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
                 if path:
                     for i in range(len(path)):
                         if i == 0:
@@ -474,11 +482,50 @@ def transform_mesh(nav_mesh, interest_points, grid, tilesize, max_speed=40, max_
     
     return new_mesh
 
-def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
+def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
+    """Calculate the turns necessary to travel from node1 to node2
+    """
+    angle_weight = 0.0
+    
+    # If node1 is at the same spot as node2, simply return the angle difference
+    if node1[0:2] == node2[0:2]:
+        if len(node2)==2:
+            return 0
+        else:
+            return (abs(angle_fix(node2[2] - node1[2])) / max_angle) * angle_weight
+    
+    # Calculate the distance between the two nodes
+    dx = node2[0] - node1[0]
+    dy = node2[1] - node1[1]
+    dist = ((dx**2 + dy**2)**0.5 / max_speed)
+
+    # Calculate the angle required to face the direction of node2
+    angle_dist1 = (abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle) * angle_weight
+
+    # Calculate the angle required to face the direction specified by node2 after arriving
+    if len(node2) == 2:
+        angle_dist2 = 0
+    else:
+        angle_dist2 = (abs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle) * angle_weight
+    
+    # Then calculate the travel cost in turns
+    if angle_dist1 == 0:
+        return dist + angle_dist2
+    else:
+        return dist + (angle_dist1 - 1) + angle_dist2
+
+def calc_turn_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
+    dx = node2[0] - node1[0]
+    dy = node2[1] - node1[1]
+
+    # Calculate the angle required to face the direction of node2
+    angle_dist1 = (abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle) * angle_weight
+    
+
+def find_single_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
     """ Uses astar to find a path from start to end,
         using the given mesh and tile grid.
     """
-    
     # If there is a straight line, just return the end point
     if not line_intersects_grid(start, end, grid, tilesize):
         return [end]
@@ -511,41 +558,6 @@ def our_find_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi
 
     # Return path
     return nodes
-
-def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
-    """Calculate the turns necessary to travel from node1 to node2
-    """
-    angle_weight = 1.0
-    
-    if len(node1) < 3:
-        print node1
-        print node2
-    # If node1 is at the same spot as node2, simply return the angle difference
-    if node1[0:2] == node2[0:2]:
-        if len(node2)==2:
-            return 0
-        else:
-            return math.ceil(abs(angle_fix(node2[2] - node1[2])) / max_angle) * angle_weight
-    
-    # Calculate the distance between the two nodes
-    dx = node2[0] - node1[0]
-    dy = node2[1] - node1[1]
-    dist = (dx**2 + dy**2)**0.5 / max_speed
-
-    # Calculate the angle required to face the direction of node2
-    angle_dist1 = (abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle) * angle_weight
-
-    # Calculate the angle required to face the direction specified by node2 after arriving
-    if len(node2) == 2:
-        angle_dist2 = 0
-    else:
-        angle_dist2 = (abs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle) * angle_weight
-    
-    # Then calculate the travel cost in turns
-    if angle_dist1 == 0:
-        return dist + angle_dist2
-    else:
-        return dist + (angle_dist1 - 1) + angle_dist2
 
 def find_all_paths(start, angle, ends, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
     """ Uses astar to find a path from start to each point in end,
