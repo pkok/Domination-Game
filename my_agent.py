@@ -227,11 +227,11 @@ class Agent(object):
                 dx = foe[0] - self.obs.loc[0]
                 dy = foe[1] - self.obs.loc[1]
                 cen_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
-                cen_dist = (dx**2 + dy**2)**0.5
+                cen_dist = (dx**2 + dy**2) ** 0.5
                 
                 if (abs(cen_angle) <= (self.settings.max_turn + math.pi/6) and 
                     cen_dist <= (self.settings.max_range + Agent.RADIUS)):
-                    approx_shootable.append((foe[0],foe[1],cen_angle,cen_dist,dx,dy))
+                    approx_shootable.append((foe[0], foe[1], cen_angle, cen_dist, dx, dy))
             
             # Check for obstruction and compute best shooting angle per foe
             really_shootable = []
@@ -240,83 +240,42 @@ class Agent(object):
                 dx = foe[4]
                 dy = foe[5]
                 edge_angle = (math.pi/2)-math.asin(dx/foe[3])
-                dx_edge = math.sin(edge_angle)* Agent.RADIUS * 0.85
-                dy_edge = math.cos(edge_angle)* Agent.RADIUS * 0.85
+                dx_edge = math.sin(edge_angle) * Agent.RADIUS * 0.85
+                dy_edge = math.cos(edge_angle) * Agent.RADIUS * 0.85
                 if dy > 0:
                     dx_edge = -dx_edge
  
                 # Calculate angles and coords of foe's edges
-                cen_angle = foe[2]
-                left_angle = angle_fix(math.atan2(dy-dy_edge, dx-dx_edge) - self.obs.angle)
-                right_angle = angle_fix(math.atan2(dy+dy_edge, dx+dx_edge) - self.obs.angle)
-                left_coords = (foe[0]-dx_edge,foe[1]-dy_edge)
-                right_coords = (foe[0]+dx_edge,foe[1]+dy_edge)
-                edge_dist = ((dx+dx_edge)**2 + (dy+dy_edge)**2)**0.5
-                        
-                # Check if center can be hit
-                cen_hit = True
-                # Check for angle
-                if abs(cen_angle) > self.settings.max_turn:
-                    cen_hit = False
-                # Check for walls
-                if cen_hit and line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
-                    cen_hit = False
-                # Check for friendly fire
-                for friendly in self.obs.friends:
-                    if cen_hit and line_intersects_circ(self.obs.loc, foe[0:2], friendly, Agent.RADIUS*1.05):
-                        cen_hit = False
-                
-                # Check if left edge can be hit
-                left_hit = True
-                # Check for distance
-                if edge_dist > self.settings.max_range:
-                    left_hit = False
-                # Check for angle
-                if abs(left_angle) > self.settings.max_turn:
-                    left_hit = False
-                # Check for walls
-                if left_hit and line_intersects_grid(self.obs.loc, left_coords, self.grid, self.settings.tilesize):
-                    left_hit = False
-                # Check for friendly fire
-                for friendly in self.obs.friends:
-                    if left_hit and line_intersects_circ(self.obs.loc, left_coords, friendly, Agent.RADIUS*1.05):
-                        left_hit = False
+                center_angle = foe[2]
+                left_angle = angle_fix(math.atan2(dy - dy_edge, dx - dx_edge) - self.obs.angle)
+                right_angle = angle_fix(math.atan2(dy + dy_edge, dx + dx_edge) - self.obs.angle)
+                left_coords = (foe[0] - dx_edge, foe[1] - dy_edge)
+                right_coords = (foe[0] + dx_edge, foe[1] + dy_edge)
+                edge_distance = ((dx + dx_edge)**2 + (dy + dy_edge)**2) ** 0.5
 
-                # Check if right edge can be hit
-                right_hit = True
-                # Check for distance
-                if edge_dist > self.settings.max_range:
-                    right_hit = False
-                #Check for angle
-                if abs(right_angle) > self.settings.max_turn:
-                    right_hit = False
-                # Check for walls
-                if right_hit and line_intersects_grid(self.obs.loc, right_coords, self.grid, self.settings.tilesize):
-                    right_hit = False
-                # Check for friendly fire
-                for friendly in self.obs.friends:
-                    if right_hit and line_intersects_circ(self.obs.loc, right_coords, friendly, Agent.RADIUS*1.05):
-                        right_hit = False
+                center_hit = self.can_hit_target(edge_distance, center_angle, foe[0:2], center=True)
+                left_hit = self.can_hit_target(edge_distance, left_angle, left_coords)
+                right_hit = self.can_hit_target(edge_distance, right_angle, right_coords)
 
                 # Check optimal angle to shoot foe depending on which parts can be hit
                 opt_angle = 0
-                if cen_hit and left_hit and right_hit:
+                if center_hit and left_hit and right_hit:
                     opt_angle = self.calc_optimal_angle(left_angle, right_angle, True, path_angle)
-                elif cen_hit and left_hit and not right_hit:
-                    opt_angle = self.calc_optimal_angle(left_angle, cen_angle, True, path_angle)
-                elif cen_hit and right_hit and not left_hit:
-                    opt_angle = self.calc_optimal_angle(cen_angle, right_angle, True, path_angle)
-                elif right_hit and left_hit and not cen_hit:
+                elif center_hit and left_hit and not right_hit:
+                    opt_angle = self.calc_optimal_angle(left_angle, center_angle, True, path_angle)
+                elif center_hit and right_hit and not left_hit:
+                    opt_angle = self.calc_optimal_angle(center_angle, right_angle, True, path_angle)
+                elif right_hit and left_hit and not center_hit:
                     opt_angle = self.calc_optimal_angle(left_angle, right_angle, False, path_angle)
-                elif cen_hit and not right_hit and not left_hit:
-                    opt_angle = cen_angle
-                elif left_hit and not cen_hit and not right_hit:
+                elif center_hit and not right_hit and not left_hit:
+                    opt_angle = center_angle
+                elif left_hit and not center_hit and not right_hit:
                     opt_angle = left_angle
-                elif right_hit and not cen_hit and not left_hit:
+                elif right_hit and not center_hit and not left_hit:
                     opt_angle = right_angle
                 
-                if cen_hit or left_hit or right_hit:
-                    really_shootable.append((foe[0],foe[1],opt_angle))
+                if center_hit or left_hit or right_hit:
+                    really_shootable.append((foe[0], foe[1], opt_angle))
             
             # Shoot the foe that requires the agent to deviate from its path the least
             if really_shootable:
@@ -328,7 +287,6 @@ class Agent(object):
                         best_difference = current_difference
                         turn = foe[2]
                         shoot = foe[:2]
-                
                 # Compute which agent you will hit
                 bullet_angle = turn + self.obs.angle
                 bullet_path = (math.cos(bullet_angle), math.sin(bullet_angle))
@@ -337,10 +295,32 @@ class Agent(object):
                 for foe in really_shootable:
                     intersection = line_intersects_circ(self.obs.loc, bullet_path, foe[0:2], Agent.RADIUS)
                     if intersection and intersection[0] < smallest_distance:
-                        smallest_distance = t_[0]
+                        smallest_distance = intersection[0]
                         shoot = foe[:2]
-        
         return shoot, turn
+
+
+    def can_hit_target(self, edge_distance, target_angle, target_coord, center=False):
+        """ Check if you can hit a target at a given distance, with a certain
+            angle.  
+        """
+        # Check if edge can be hit
+        can_hit = True
+        # Check for distance
+        if edge_distance > self.settings.max_range and not center:
+            can_hit = False
+        # Check for angle
+        if abs(target_angle) > self.settings.max_turn:
+            can_hit = False
+        # Check for walls
+        if can_hit and line_intersects_grid(self.obs.loc, target_coords, self.grid, self.settings.tilesize):
+            can_hit = False
+        # Check for friendly fire
+        for friendly in self.obs.friends:
+            if can_hit and line_intersects_circ(self.obs.loc, target_coords, friendly, Agent.RADIUS*1.05):
+                can_hit = False
+        return can_hit
+
     
     def calc_optimal_angle(self, left_angle, right_angle, interval, path_angle):
         """This function returns the optimal angle given some (interval of) angles
