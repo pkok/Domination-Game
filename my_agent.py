@@ -77,7 +77,7 @@ class Agent(object):
         # Compute the goal
         #self.set_goal_sarsa()
         self.set_goal_hardcoded()
-        self.joint_observation.update_goal(self.id, self.goal)
+        #self.joint_observation.update_goal(self.id, self.goal)
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -99,85 +99,112 @@ class Agent(object):
     def set_goal_hardcoded(self):
         """This function sets the goal for the agent.
         """
+
+        # If the agent is not agent 0, it's goal has already been computed
+        if self.id != 0:
+            self.goal = self.joint_observation.goals[self.id]
+            return
+        
         # Intinialise some handy variables
+        goals = [(0,0), (0,0), (0.0)]
+        assigned = []
+        
         cp1_loc = Agent.INTEREST_POINTS['cp1']
         cp2_loc = Agent.INTEREST_POINTS['cp2']
         am1_loc = Agent.INTEREST_POINTS['am1']
         am2_loc = Agent.INTEREST_POINTS['am2']
-        
-        # Check if agent reached goal.
-        if self.goal is not None and point_dist(self.goal, self.obs.loc) < self.settings.tilesize:
-            self.goal = None
-        
-        # Drive to where the user clicked
-        # Clicked is a list of tuples of (x, y, shift_down, is_selected)
-        if self.selected and self.obs.clicked:
-            self.goal = self.obs.clicked[0][0:2]
-            return
-
-        # Walk to ammo if it is closer than current goal
-        ammopacks = filter(lambda x: x[2] == "Ammo", self.obs.objects)
-        if ammopacks:
-            dx = ammopacks[0][0] - self.obs.loc[0]
-            dy = ammopacks[0][1] - self.obs.loc[1]
-            ammo_angle_forward = angle_fix(math.atan2(dy, dx) - self.obs.angle)
-            ammo_angle_reverse = angle_fix(ammo_angle_forward - math.pi)
-            ammo_dist = (dx**2 + dy**2)**0.5
-
-            if self.goal is None:
-                self.goal = ammopacks[0][0:2]
-#            else:
-#                goal_path = find_single_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
-#                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
-#                ammo_path = find_single_path(self.obs.loc, self.obs.angle, ammopacks[0][0:2], self.mesh, self.grid,
-#                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
-#                if self.calc_path_length(ammo_path) < self.calc_path_length(goal_path):
-#                    self.goal = ammopacks[0][0:2]
-            return
-
-        # If no current goal, follow some policy        
-        if self.goal is None:
-            # Initialise some handy parameters
-            team = int(self.team == TEAM_BLUE)
-            cp1 = self.obs.cps[0][2] == team
-            cp2 = self.obs.cps[1][2] == team
-
-            ammo_positions = [(184,168), (312,104)]
             
-            at_cp1 = (point_dist(self.obs.cps[0][0:2], self.obs.loc) < self.settings.tilesize)
-            at_cp2 = (point_dist(self.obs.cps[1][0:2], self.obs.loc) < self.settings.tilesize)
-            at_ammo1 = (point_dist(ammo_positions[0], self.obs.loc) < self.settings.tilesize)
-            at_ammo2 = (point_dist(ammo_positions[0], self.obs.loc) < self.settings.tilesize)
+        cp1_dist = []
+        cp2_dist = []
+        am1_dist = []
+        am2_dist = []
+        
+        am1 = False
+        am2 = False
+        am1_timer = 0
+        am2_timer = 0
+        
+        for obj in self.joint_observation.objects:
+            if obj[0:2] == am1_loc:
+                am1_timer = self.joint_observation.step - self.joint_observation.objects[obj][0]
+                if am1_timer != 0:
+                    am1_timer = max(0, self.settings.ammo_rate-am1_timer+1)
+                else:
+                    am1 = True
+            if obj[0:2] == am2_loc:
+                am2_timer = self.joint_observation.step - self.joint_observation.objects[obj][0]
+                if am2_timer != 0:
+                    am2_timer = max(0, self.settings.ammo_rate-am2_timer+1)
+                else:
+                    am2 = True
+        #print (am1, am1_timer)
+        #print (am2, am2_timer)
+        for id in range(3):
+            cp1_dist.append(self.joint_observation.paths[id]['cp1'][1])
+            cp2_dist.append(self.joint_observation.paths[id]['cp2'][1])
+            am1_dist.append(self.joint_observation.paths[id]['am1'][1])
+            am2_dist.append(self.joint_observation.paths[id]['am2'][1])
+        
+        team = int(self.team == TEAM_BLUE)
+        own_cp1 = self.obs.cps[0][2] == team
+        own_cp2 = self.obs.cps[1][2] == team
+
+        # If no control points held, follow this policy
+        if True:#not own_cp1 and not own_cp2:
             
-            # If no control points are controlled, walk to a random control point
-            if not cp1 and not cp2:
-                self.goal = random.choice(self.obs.cps)[0:2]
-            # If both control points are occupied and agent has no ammo, walk to a random ammo spawn
-            elif cp1 and cp2 and self.obs.ammo == 0:
-                self.goal = random.choice(ammo_positions)
-            # If agent is at a control point, walk to a random ammo spawn
-            elif (at_cp1 or at_cp2):
-                self.goal = random.choice(ammo_positions)
-            # If agent is at an ammo spawn, walk to a random uncontrolled control point
-            elif at_ammo1 or at_ammo2:
-                self.goal = self.obs.cps[1][0:2] if cp1 else self.obs.cps[0][0:2]
-            # If one control point is occupied, walk to the other
-            elif cp1 and not cp2:
-                self.goal = self.obs.cps[1][0:2]
-            elif cp2 and not cp1:
-                self.goal = self.obs.cps[0][0:2]
-            else:
-                self.goal = random.choice(self.obs.cps)[0:2]
+            # Send agent closest to cp1 to cp1
+            min, min_id = 10000.0, 0
+            for id in range(3):
+                if cp1_dist[id] < min:
+                    min = cp1_dist[id]
+                    min_id = id
+            goals[min_id] = cp1_loc
+            assigned.append(min_id)
+            
+            # Send agent closest to cp2 to cp2
+            min, min_id = 10000.0, 0
+            for id in range(3):
+                if (id not in assigned) and cp2_dist[id] < min:
+                    min = cp2_dist[id]
+                    min_id = id
+            goals[min_id] = cp2_loc
+            assigned.append(min_id)
+
+            # Send the other agent to collect ammo
+            for id in range(3):
+                if id not in assigned:
+                    # Go to closest ammo
+                    if am1 and am2:
+                        if am1_dist[id] < am2_dist[id]:
+                            goals[id] = am1_loc
+                        else:
+                            goals[id] = am2_loc
+                    elif am1:
+                        goals[id] = am1_loc
+                    elif am2:
+                        goals[id] = am2_loc
+                    else:
+                        am1_delay = max(am1_dist[id], am1_timer)
+                        am2_delay = max(am2_dist[id], am2_timer)
+                        if am1_delay < am2_delay:
+                            goals[id] = am1_loc
+                        else:
+                            goals[id] = am2_loc
+                assigned.append(id)
+
+        # If one control point held, follow this policy
+        #if own_cp1 != own_cp2:
+        #    return
+            
+        # If both control points held, follow this policy
+        #if own_cp1 and own_cp2:
+        #    return
     
-    def calc_path_length(self, path):
-        """This function calculates the length of a path in pixels
-        """
-        path_length = 0.0
-        for i in range(len(path)-1):
-            dx = path[i+1][0] - path[i][0]
-            dy = path[i+1][1] - path[i][0]
-            path_length += (dx**2 + dy**2)**0.5
-        return path_length
+        # Set the joint goal
+        self.joint_observation.goals = goals
+        
+        # Instantiate goal for agent 0
+        self.goal = goals[0]
     
     def get_action(self):
         """This function returns the action tuple for the agent.
@@ -186,7 +213,7 @@ class Agent(object):
             if self.goal == Agent.INTEREST_POINTS[ip]:
                 path = self.joint_observation.paths[self.id][ip][0]
 
-        if path is None:
+        if not path:
             # Compute path and angle to path
             path = find_single_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
                                 self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
@@ -199,7 +226,9 @@ class Agent(object):
             # Compute shoot and turn
             shoot, turn = self.compute_shoot(path_angle)
             # Compute speed
-            speed = self.compute_speed(turn, path_dist)
+
+
+            speed = self.compute_speed(turn, path_angle, path_dist)
 
         # If no path was found, do nothing
         else:
@@ -366,22 +395,25 @@ class Agent(object):
 
         return optimal_angle
     
-    def compute_speed(self, turn, distance):
-        # Compute speed based on angle with planned path and planned distance
-        maxangle = (math.pi/2)+self.settings.max_turn
+    def compute_speed(self, turn, old_path_angle, distance):
+        """ Compute speed based on angle with planned path and planned distance
+        """
+        if turn > self.settings.max_turn:
+            turn = self.settings.max_turn
+        elif turn < -self.settings.max_turn:
+            turn = -self.settings.max_turn
+        path_angle = angle_fix(old_path_angle - turn)
         
-        #If agent cannot reduce angle to below 90 degrees by turning, set speed to zero
-        if turn >= maxangle or turn <= -maxangle:
+        if abs(path_angle) >= math.pi/2:
             speed = 0
         
         # If agent can at least face partly in the right direction, move some fraction of required distance
-        elif ((turn > self.settings.max_turn and turn < maxangle) or 
-            (turn < -self.settings.max_turn and turn > -maxangle)):
+        elif abs(path_angle) > 0.0 and abs(path_angle) < math.pi/2:
             # Cap distance at 30 when not facing exactly in the right direction
             if distance > 30:
                 distance = 30
             # Scale distance by how well the agent can move in the right direction
-            speed = distance*(1-((abs(turn)-self.settings.max_turn)/(math.pi/2)))
+            speed = distance*(1-(abs(path_angle)/(math.pi/2)))
         
         # If agent can reduce angle to zero, move the required distance
         else:
@@ -734,11 +766,11 @@ class JointObservation(object):
         print "JointObservation.joint_actions: " + str(self.joint_actions)
         
         # Keep track of paths to interest points for each agent at each timestep
-        self.paths = {} # agent_id: {'cp1':(path,length), ..}
+        self.paths = [] # [{'cp1':(path,length), ..}, ...]
+        # Keep track of each agent's goal
+        self.goals = [] # [agent0_goal, agent1_goal, ...]
         # Keep track of actions from other agents during each timestep
-        self.actions = {} # agent_id: (turn, speed, shoot)
-        # Keep track of goals actions by agents
-        self.goals = {} # agent_id: goal
+        self.actions = {} # [(turn, speed, shoot), ...]
 
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
@@ -819,9 +851,9 @@ class JointObservation(object):
             for agents to decide which action to take.
         """
         if agent_id == (self.number_of_agents - 1):
-            self.goals = {}
+            self.goals = []
         else:
-            self.goals[agent_id] = goal
+            self.goals.append(goal)
 
     def goal_chosen(self, goal):
         """ Check if an other agent is moving towards the same goal.
