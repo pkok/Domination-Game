@@ -334,7 +334,7 @@ class Agent(object):
                 bullet_path = (math.cos(bullet_angle), math.sin(bullet_angle))
                 bullet_path = point_mul(bullet_path, self.settings.max_range)
                 smallest_distance = 1.0
-                for foe in really_shootable:
+                for foe in self.obs.foes:
                     intersection = line_intersects_circ(self.obs.loc, bullet_path, foe[0:2], Agent.RADIUS)
                     if intersection and intersection[0] < smallest_distance:
                         smallest_distance = t_[0]
