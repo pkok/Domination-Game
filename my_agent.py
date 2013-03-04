@@ -107,6 +107,10 @@ class Agent(object):
         # Intinialise some handy variables
         goals = [(0,0), (0,0), (0.0)]
         assigned = []       
+        have_ammo = []
+        for id in range(3):
+            if self.joint_observation.friends[id][3] > 0:
+                have_ammo.append(id)
         
         cp1_loc = Agent.INTEREST_POINTS['cp1']
         cp2_loc = Agent.INTEREST_POINTS['cp2']
@@ -154,8 +158,8 @@ class Agent(object):
         own_cp1 = self.obs.cps[0][2] == team
         own_cp2 = self.obs.cps[1][2] == team
 
-        # If no control points held, follow this policy
-        if True:#not own_cp1 and not own_cp2:
+        #If no agent has ammo, follow this policy
+        if True:#len(have_ammo) == 0:
             
             # Send agent closest to cp1 to cp1
             min, min_id = 10000.0, 0
@@ -180,10 +184,7 @@ class Agent(object):
                 if id not in assigned:
                     # Go to closest ammo
                     if am1 and am2:
-                        if am1_dist[id] < am2_dist[id]:
-                            goals[id] = am1_loc
-                        else:
-                            goals[id] = am2_loc
+                        goals[id] = am1_loc if (am1_dist[id] < am2_dist[id]) else am2_loc
                     elif am1:
                         goals[id] = am1_loc
                     elif am2:
@@ -198,14 +199,38 @@ class Agent(object):
                             goals[id] = am2_loc
                 assigned.append(id)
 
-        # If one control point held, follow this policy
-        #if own_cp1 != own_cp2:
-        #    return
+        # If one agent has ammo, follow this policy
+        elif len(have_ammo) == 1:
+            # Send the agent with ammo to nearest uncontrolled cp, and one to the other cp, and one for ammo
+            pass
+            # Assign the agent with ammo to the nearest uncontrolled cp
+#            ammo_id = have_ammo[0]
+#            if not own_cp1:
+#                goals[id] = cp1_loc
+#            elif not own_cp2:
+#                goals[id] = cp2_loc
+#            else:
+                # Check if there is a cp with no one on it
+#                for a in range(3):
+#                    cp1_dist
             
-        # If both control points held, follow this policy
-        #if own_cp1 and own_cp2:
-        #    return
-    
+#            assigned.append(id)
+            
+        # If two agents have ammo, follow this policy
+        elif len(have_ammo) == 2:
+            # Both agents with ammo go for a closest control point each, the other gets ammo
+            pass
+        
+        # If three agents have ammo, and at least one cp is uncontrolled, follow this policy
+        elif len(have_ammo) == 3 and not (own_cp1 and own_cp2):
+            # Send two agents to one unheld cp, and one agent to the other cp
+            pass
+        
+        # If three agents have ammo, and both cps are controlled, follow this policy
+        elif len(have_ammo) == 3 and own_cp1 and own_cp2:
+            # Send one agents to each cp, and one agent to camp ammo spawn closest to enemy base
+            pass
+        
         # Set the joint goal
         self.joint_observation.goals = goals
         
@@ -215,6 +240,7 @@ class Agent(object):
     def get_action(self):
         """This function returns the action tuple for the agent.
         """
+        path = []
         for ip in Agent.INTEREST_POINTS:
             if self.goal == Agent.INTEREST_POINTS[ip]:
                 path = self.joint_observation.paths[self.id][ip][0]
@@ -408,7 +434,7 @@ class Agent(object):
         return speed
 
     def defend(self):
-        """ Returns the turn an agent should to to defend a point
+        """ Returns the turn an agent should to to defend a point on the map
         """
         # Determine new angle the agent should be at
         new_angle = 0.0
@@ -434,10 +460,6 @@ class Agent(object):
         
         # Calculate how the agent should turn to face the new angle
         return angle_fix(new_angle - self.obs.angle)
-        
-        # If no foes are near, face the direction of the opponent's base
-        #if not self.obs.foes:
-        #return 0.0
 
     def debug(self, surface):
         """ Allows the agents to draw on the game UI,
