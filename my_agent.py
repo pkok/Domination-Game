@@ -184,6 +184,7 @@ class Agent(object):
                     else:
                         am1_delay = max(am1_dist[id], am1_timer)
                         am2_delay = max(am2_dist[id], am2_timer)
+                        
                         if am1_delay < am2_delay:
                             goals[id] = am1_loc
                         else:
@@ -210,7 +211,7 @@ class Agent(object):
         for ip in Agent.INTEREST_POINTS:
             if self.goal == Agent.INTEREST_POINTS[ip]:
                 path = self.joint_observation.paths[self.id][ip][0]
-
+        
         if not path:
             # Compute path and angle to path
             path = find_single_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
@@ -224,8 +225,6 @@ class Agent(object):
             # Compute shoot and turn
             shoot, turn = self.compute_shoot(path_angle)
             # Compute speed
-
-
             speed = self.compute_speed(turn, path_angle, path_dist)
 
         # If no path was found, do nothing
@@ -241,8 +240,6 @@ class Agent(object):
         """
         shoot = False
         turn = path_angle
-        
-        # print self.joint_observation.actions
         
         # Check for ammo and nearby enemies
         if self.obs.ammo > 0 and self.obs.foes:
@@ -477,60 +474,50 @@ def transform_mesh(nav_mesh, interest_points, grid, tilesize, max_speed=40, max_
         full_mesh[start] = {}
         for end in nav_mesh:
             if not line_intersects_grid(start, end, grid, tilesize):
-                full_mesh[start][end] = 0
+                full_mesh[start][end] = calc_cost(start, end)
     
     # Add in angles and calculate new cost for transitions
-    new_mesh = {}
-    angles = list(frange(-math.pi, math.pi, max_angle*(8/4.0)))
-    for start in full_mesh:
-        for angle in angles:
-            start_ = start + (angle,)
-            new_mesh[start_] = {}
-            for angle_ in angles:
-                for end in full_mesh[start]:
-                    new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)
+    #new_mesh = {}
+    #angles = list(frange(-math.pi, math.pi, max_angle*(8/4.0)))
+    #for start in full_mesh:
+    #    for angle in angles:
+    #        start_ = start + (angle,)
+    #        new_mesh[start_] = {}
+    #        for angle_ in angles:
+    #            for end in full_mesh[start]:
+    #                new_mesh[start_][end+(angle_,)] = calc_cost(start_,end+(angle_,),max_speed,max_angle)
     
-    return new_mesh
+    return full_mesh
 
 def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
-    """Calculate the turns necessary to travel from node1 to node2
-    """
-    angle_weight = 0.0
-    
-    # If node1 is at the same spot as node2, simply return the angle difference
-    if node1[0:2] == node2[0:2]:
-        if len(node2)==2:
-            return 0
-        else:
-            return (abs(angle_fix(node2[2] - node1[2])) / max_angle) * angle_weight
-    
+    #Calculate the turns necessary to travel from node1 to node2
+ 
     # Calculate the distance between the two nodes
     dx = node2[0] - node1[0]
     dy = node2[1] - node1[1]
     dist = ((dx**2 + dy**2)**0.5 / max_speed)
-
-    # Calculate the angle required to face the direction of node2
-    angle_dist1 = (abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle) * angle_weight
-
-    # Calculate the angle required to face the direction specified by node2 after arriving
-    if len(node2) == 2:
-        angle_dist2 = 0
-    else:
-        angle_dist2 = (abs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle) * angle_weight
     
-    # Then calculate the travel cost in turns
-    if angle_dist1 == 0:
-        return dist + angle_dist2
-    else:
-        return dist + (angle_dist1 - 1) + angle_dist2
+    # If no angle is specified, just return the distance in turns
+    if len(node1) == 2 and len(node2) == 2:
+        return dist
+        
+    # If angle is specified for the first node, calculate the turn cost
+    angle1_weight = 1.0
+    angle1_dist = 0.0
+    if len(node1) == 3:
+        angle1_dist = (abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle) * angle1_weight
 
-def calc_turn_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
-    dx = node2[0] - node1[0]
-    dy = node2[1] - node1[1]
-
-    # Calculate the angle required to face the direction of node2
-    angle_dist1 = (abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle) * angle_weight
+    # If angle is specified for the second node, calculate the turn cost
+    angle2_weight = 1.0
+    angle2_dist = 0.0
+    if len(node2) == 3:
+        angle2_dist = (abs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle) * angle2_weight
     
+    # Then calculate the travel cost
+    if angle1_dist < 1.0:
+        return dist + angle2_dist
+    else:
+        return dist + (angle1_dist - 1.0) + angle2_dist    
 
 def find_single_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
     """ Uses astar to find a path from start to end,
@@ -541,30 +528,33 @@ def find_single_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math
         return [end]
     
     # Add temp nodes for end:
-    endconns = [(n, calc_cost(n,end,max_speed,max_angle)) for n in mesh 
-                if not line_intersects_grid(end,n[0:2],grid,tilesize)]
-    for n, cost in endconns:
-        mesh[n][end] = cost
+    if not end in mesh:
+        endconns = [(n, calc_cost(n,end,max_speed,max_angle)) for n in mesh 
+                    if not line_intersects_grid(n[0:2],end,grid,tilesize)]
+        for n, cost in endconns:
+            mesh[n][end] = cost
     
     # Add temp nodes for start
     start_list = []
+    start_angle = start+(angle,)
     for n in mesh:
-        if not line_intersects_grid(start,n[0:2],grid,tilesize):
-            start_list.append((n, calc_cost(start+(angle,),n,max_speed,max_angle)))
-    mesh[start] = dict(start_list)
+        if not start == n and line_intersects_grid(start,n[0:2],grid,tilesize):
+            start_list.append((n, calc_cost(start_angle,n,max_speed,max_angle)))
+    mesh[start_angle] = dict(start_list)
     
     # Plan path
     neighbours = lambda n: mesh[n].keys()
     cost       = lambda n1, n2: mesh[n1][n2]
     goal       = lambda n: n == end
     heuristic  = lambda n: ((n[0]-end[0])**2 + (n[1]-end[1])**2)**0.5 / max_speed
-    nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
+    nodes, length = astar(start_angle, neighbours, goal, 0, cost, heuristic)
 
     # Remove temp nodes for start and end from mesh
-    del mesh[start]
-    for n in mesh:
-        if mesh[n].has_key(end):
-            del mesh[n][end]
+    del mesh[start_angle]
+    if not end in mesh:
+        for n in mesh:
+            if mesh[n].has_key(end):
+                del mesh[n][end]
 
     # Return path
     return nodes
@@ -576,31 +566,32 @@ def find_all_paths(start, angle, ends, mesh, grid, max_speed=40, max_angle=math.
     
     # Add temp nodes for start
     start_list = []
+    start_angle = start+(angle,)
     for n in mesh:
-        if not line_intersects_grid(start,n[0:2],grid,tilesize):
-            start_list.append((n, calc_cost(start+(angle,),n,max_speed,max_angle)))
-    mesh[start] = dict(start_list)
+        if not n == start and not line_intersects_grid(start,n[0:2],grid,tilesize):
+            start_list.append((n, calc_cost(start_angle,n,max_speed,max_angle)))
+    mesh[start_angle] = dict(start_list)
     
     path_dict = {}
     for end_point in ends:
-        end = ends[end_point]              
+        end = ends[end_point]
         
         # If there is a straight line, just return the end point
         if not line_intersects_grid(start, end, grid, tilesize):
-            path_dict[end_point] = ([end], calc_cost(start+(angle,),end,max_speed,max_angle))
+            path_dict[end_point] = ([end], calc_cost(start_angle,end,max_speed,max_angle))
         else:
             # Plan path
             neighbours = lambda n: mesh[n].keys()
             cost       = lambda n1, n2: mesh[n1][n2]
             goal       = lambda n: n == end+(0.0,)
             heuristic  = lambda n: ((n[0]-end[0])**2 + (n[1]-end[1])**2)**0.5 / max_speed
-            nodes, length = astar(start, neighbours, goal, 0, cost, heuristic)
+            nodes, length = astar(start_angle, neighbours, goal, 0, cost, heuristic)
             
             # Save path
             path_dict[end_point] = (nodes, length)
         
-    # Remove temp nodes for start and end from mesh
-    del mesh[start]
+    # Remove temp nodes for start
+    del mesh[start_angle]
 
     # Return path dictionary
     return path_dict
