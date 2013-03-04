@@ -327,7 +327,7 @@ class Agent(object):
         return shoot, turn
 
 
-    def can_hit_target(self, edge_distance, target_angle, target_coord, center=False):
+    def can_hit_target(self, edge_distance, target_angle, target_coords, center=False):
         """ Check if you can hit a target at a given distance, with a certain
             angle.  
         """
