@@ -77,7 +77,6 @@ class Agent(object):
         # Compute the goal
         #self.set_goal_sarsa()
         self.set_goal_hardcoded()
-        #self.joint_observation.update_goal(self.id, self.goal)
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -137,8 +136,7 @@ class Agent(object):
                     am2_timer = max(0, self.settings.ammo_rate-am2_timer+1)
                 else:
                     am2 = True
-        #print (am1, am1_timer)
-        #print (am2, am2_timer)
+
         for id in range(3):
             cp1_dist.append(self.joint_observation.paths[id]['cp1'][1])
             cp2_dist.append(self.joint_observation.paths[id]['cp2'][1])
@@ -823,17 +821,6 @@ class JointObservation(object):
             self.actions = {}
         else:
             self.actions[agent_id] = action_tuple
-
-    def update_goal(self, agent_id, goal):
-        """ Register the goal of agents.  This information can be retrieved
-            through methods such as:
-              - JointObservation.goal_chosen(goal) -> bool
-            for agents to decide which action to take.
-        """
-        if agent_id == (self.number_of_agents - 1):
-            self.goals = []
-        else:
-            self.goals.append(goal)
 
     def goal_chosen(self, goal):
         """ Check if an other agent is moving towards the same goal.
