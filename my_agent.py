@@ -106,7 +106,7 @@ class Agent(object):
         
         # Intinialise some handy variables
         goals = [(0,0), (0,0), (0.0)]
-        assigned = []
+        assigned = []       
         
         cp1_loc = Agent.INTEREST_POINTS['cp1']
         cp2_loc = Agent.INTEREST_POINTS['cp2']
@@ -138,10 +138,17 @@ class Agent(object):
                     am2 = True
 
         for id in range(3):
-            cp1_dist.append(self.joint_observation.paths[id]['cp1'][1])
-            cp2_dist.append(self.joint_observation.paths[id]['cp2'][1])
-            am1_dist.append(self.joint_observation.paths[id]['am1'][1])
-            am2_dist.append(self.joint_observation.paths[id]['am2'][1])
+            # Add respawn timer to distance calculation
+            if self.joint_observation.respawn_in[id] > 0:
+                respawn_time = self.joint_observation.respawn_in[id]
+            else:
+                respawn_time = 0
+            
+            # Calculate distances
+            cp1_dist.append(self.joint_observation.paths[id]['cp1'][1] + respawn_time)
+            cp2_dist.append(self.joint_observation.paths[id]['cp2'][1] + respawn_time)
+            am1_dist.append(self.joint_observation.paths[id]['am1'][1] + respawn_time)
+            am2_dist.append(self.joint_observation.paths[id]['am2'][1] + respawn_time)
         
         team = int(self.team == TEAM_BLUE)
         own_cp1 = self.obs.cps[0][2] == team
@@ -232,6 +239,10 @@ class Agent(object):
             turn = 0
             speed = 0
             shoot = False
+        
+        # If the agent's goal is where he is already at, posture to face the right way
+        if not shoot and path[0] == self.goal and speed == 0.0:
+            turn = self.defend()
         
         return (turn,speed,shoot)
     
@@ -396,6 +407,38 @@ class Agent(object):
         
         return speed
 
+    def defend(self):
+        """ Returns the turn an agent should to to defend a point
+        """
+        # Determine new angle the agent should be at
+        new_angle = 0.0
+        
+        # If no foes are nearby, just face the direction of the other team's base
+        if (self.team == TEAM_RED):
+            new_angle = 0.0
+        else:
+            new_angle = -math.pi
+        
+        # If foes are nearby, face the foe that requires the least turning to face
+        req_turn = 2*math.pi
+        for foe in self.obs.foes:
+            if not line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
+                dx = foe[0] - self.obs.loc[0]
+                dy = foe[1] - self.obs.loc[1]
+                foe_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
+                req_turn_foe = angle_fix(foe_angle - self.obs.angle)
+                
+                if req_turn_foe < req_turn:
+                    req_turn = req_turn_foe
+                    new_angle = foe_angle 
+        
+        # Calculate how the agent should turn to face the new angle
+        return angle_fix(new_angle - self.obs.angle)
+        
+        # If no foes are near, face the direction of the opponent's base
+        #if not self.obs.foes:
+        #return 0.0
+
     def debug(self, surface):
         """ Allows the agents to draw on the game UI,
             Refer to the pygame reference to see how you can
@@ -502,13 +545,13 @@ def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
         return dist
         
     # If angle is specified for the first node, calculate the turn cost
-    angle1_weight = 1.0
+    angle1_weight = 0.0
     angle1_dist = 0.0
     if len(node1) == 3:
         angle1_dist = (abs(angle_fix(math.atan2(dy,dx) - node1[2])) / max_angle) * angle1_weight
 
     # If angle is specified for the second node, calculate the turn cost
-    angle2_weight = 1.0
+    angle2_weight = 0.0
     angle2_dist = 0.0
     if len(node2) == 3:
         angle2_dist = (abs(angle_fix(node2[2] - math.atan2(dy,dx))) / max_angle) * angle2_weight
