@@ -12,7 +12,7 @@ astar = astar.astar
 
 class Agent(object):
     
-    NAME = "verfkwast"
+    NAME = "Dalek Caan"
     RADIUS = 6.0 # Radius in pixels of an agent.
     INTEREST_POINTS = {'cp1':(232, 56), 'cp2':(264, 216), 'am1':(184,168), 'am2':(312,104)}
     
