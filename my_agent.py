@@ -551,10 +551,10 @@ class Agent(object):
             if not line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
                 dx = foe[0] - self.obs.loc[0]
                 dy = foe[1] - self.obs.loc[1]
-                foe_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
+                foe_angle = math.atan2(dy, dx)
                 req_turn_foe = angle_fix(foe_angle - self.obs.angle)
                 
-                if req_turn_foe < req_turn:
+                if abs(req_turn_foe) < abs(req_turn):
                     req_turn = req_turn_foe
                     new_angle = foe_angle 
         
