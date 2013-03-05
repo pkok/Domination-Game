@@ -109,7 +109,7 @@ class Agent(object):
         assigned = []       
         have_ammo = []
         for id in range(3):
-            if self.joint_observation.friends[id][3] > 0:
+            if self.joint_observation.friends[id][3] > 1:
                 have_ammo.append(id)
         
         cp1_loc = Agent.INTEREST_POINTS['cp1']
@@ -147,7 +147,6 @@ class Agent(object):
                 respawn_time = self.joint_observation.respawn_in[id]
             else:
                 respawn_time = 0
-            
             # Calculate distances
             cp1_dist.append(self.joint_observation.paths[id]['cp1'][1] + respawn_time)
             cp2_dist.append(self.joint_observation.paths[id]['cp2'][1] + respawn_time)
@@ -159,7 +158,7 @@ class Agent(object):
         own_cp2 = self.obs.cps[1][2] == team
 
         #If no agent has ammo, follow this policy
-        if True:#len(have_ammo) == 0:
+        if len(have_ammo) == 0:
             
             # Send agent closest to cp1 to cp1
             min, min_id = 10000.0, 0
@@ -202,34 +201,124 @@ class Agent(object):
         # If one agent has ammo, follow this policy
         elif len(have_ammo) == 1:
             # Send the agent with ammo to nearest uncontrolled cp, and one to the other cp, and one for ammo
-            pass
-            # Assign the agent with ammo to the nearest uncontrolled cp
-#            ammo_id = have_ammo[0]
-#            if not own_cp1:
-#                goals[id] = cp1_loc
-#            elif not own_cp2:
-#                goals[id] = cp2_loc
-#            else:
-                # Check if there is a cp with no one on it
-#                for a in range(3):
-#                    cp1_dist
+
+            # Assign the agent with ammo to the nearest cp
+            ammo_id = have_ammo[0]
+            goals[ammo_id] = cp1_loc if (cp1_dist[ammo_id] < cp2_dist[ammo_id]) else cp2_loc
+            assigned.append(ammo_id)
             
-#            assigned.append(id)
+            # Send agent closest to other cp to other cp
+            if cp1_loc in goals:
+                other_cp_dist, other_cp_loc = cp2_dist, cp2_loc
+            else:
+                other_cp_dist, other_cp_loc = cp1_dist, cp1_loc
+                
+            min, min_id = 10000.0, 0
+            for id in range(3):
+                if (id not in assigned) and other_cp_dist[id] < min:
+                    min = other_cp_dist[id]
+                    min_id = id
+            goals[min_id] = other_cp_loc
+            assigned.append(min_id)
             
+            # Send other agent to collect ammo
+            for id in range(3):
+                if id not in assigned:
+                    # Go to closest ammo
+                    if am1 and am2:
+                        goals[id] = am1_loc if (am1_dist[id] < am2_dist[id]) else am2_loc
+                    elif am1:
+                        goals[id] = am1_loc
+                    elif am2:
+                        goals[id] = am2_loc
+                    else:
+                        am1_delay = max(am1_dist[id], am1_timer)
+                        am2_delay = max(am2_dist[id], am2_timer)
+                        
+                        if am1_delay < am2_delay:
+                            goals[id] = am1_loc
+                        else:
+                            goals[id] = am2_loc
+                assigned.append(id)
+        
         # If two agents have ammo, follow this policy
         elif len(have_ammo) == 2:
             # Both agents with ammo go for a closest control point each, the other gets ammo
-            pass
+            
+            # Assign the agent with ammo to the nearest cp
+            ammo_id = have_ammo[0]
+            goals[ammo_id] = cp1_loc if (cp1_dist[ammo_id] < cp2_dist[ammo_id]) else cp2_loc
+            assigned.append(ammo_id)
+            
+            # Send agent with ammo closest to cp1 to cp1
+            min, min_id = 10000.0, 0
+            for id in have_ammo:
+                if cp1_dist[id] < min:
+                    min = cp1_dist[id]
+                    min_id = id
+            goals[min_id] = cp1_loc
+            assigned.append(min_id)
         
+            # Send other agent with ammo to other cp
+            for id in have_ammo:
+                if id not in assigned:
+                    goals[id] = cp2_loc if (cp1_loc in goals) else cp1_loc
+            
+            # Send other agent to get ammo
+            for id in range(3):
+                if id not in assigned:
+                    # Go to closest ammo
+                    if am1 and am2:
+                        goals[id] = am1_loc if (am1_dist[id] < am2_dist[id]) else am2_loc
+                    elif am1:
+                        goals[id] = am1_loc
+                    elif am2:
+                        goals[id] = am2_loc
+                    else:
+                        am1_delay = max(am1_dist[id], am1_timer)
+                        am2_delay = max(am2_dist[id], am2_timer)
+                        
+                        if am1_delay < am2_delay:
+                            goals[id] = am1_loc
+                        else:
+                            goals[id] = am2_loc
+                assigned.append(id)
+            
         # If three agents have ammo, and at least one cp is uncontrolled, follow this policy
-        elif len(have_ammo) == 3 and not (own_cp1 and own_cp2):
+        elif len(have_ammo) == 3:
             # Send two agents to one unheld cp, and one agent to the other cp
-            pass
+            
+            # Send agent closest to cp1 to cp1
+            min, min_id = 10000.0, 0
+            for id in range(3):
+                if cp1_dist[id] < min:
+                    min = cp1_dist[id]
+                    min_id = id
+            goals[min_id] = cp1_loc
+            assigned.append(min_id)
+            
+            # Send agent closest to cp2 to cp2
+            min, min_id = 10000.0, 0
+            for id in range(3):
+                if (id not in assigned) and cp2_dist[id] < min:
+                    min = cp2_dist[id]
+                    min_id = id
+            goals[min_id] = cp2_loc
+            assigned.append(min_id)
+            
+            # If at least one cp is uncontrolled, send other agent to closest cp
+            if not (own_cp1 and own_cp2):
+                for id in range(3):
+                    if id not in assigned:
+                        goals[id] = cp1_loc if (cp1_dist[id] < cp2_dist[id]) else cp2_loc
+                        assigned.append(id)
         
-        # If three agents have ammo, and both cps are controlled, follow this policy
-        elif len(have_ammo) == 3 and own_cp1 and own_cp2:
-            # Send one agents to each cp, and one agent to camp ammo spawn closest to enemy base
-            pass
+            # If both cps are controlled, send other agent to ammo spawn closest to enemy base
+            else:
+                for id in range(3):
+                    if id not in assigned:
+                        goals[id] = am1_loc if (self.team == TEAM_BLUE) else am2_loc
+                        assigned.append(id)
         
         # Set the joint goal
         self.joint_observation.goals = goals
