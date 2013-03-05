@@ -281,7 +281,17 @@ class Agent(object):
     def allow_reverse_gear(self, path, forward_angle, reverse_angle):
         """ Is it safe/smart to drive backwards?
         """
-        return abs(reverse_angle) < abs(forward_angle)
+        better_angle = abs(reverse_angle) < abs(forward_angle)
+        no_ammo = not self.obs.ammo
+        loc = self.obs.loc
+        #observe_all_foes = len(self.joint_observation.foes) == self.number_of_agents
+        nearby_foes = False
+        for foe in self.joint_observation.foes[self.joint_observation.step]:
+            print str(foe) + "  " + str(loc)
+            if not line_intersects_grid(self.obs.loc, foe[:2], self.grid, self.settings.tilesize):
+                nearby_foes = True
+                break
+        return better_angle and (no_ammo or not nearby_foes)
     
     def compute_shoot(self, path_angle):
         """This function returns shoot and turn actions for the agent
