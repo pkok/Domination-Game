@@ -342,12 +342,17 @@ class Agent(object):
             dx = path[0][0] - self.obs.loc[0]
             dy = path[0][1] - self.obs.loc[1]
             path_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
+            path_reverse_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle + math.pi)
+            speed = 1
+            if self.allow_reverse_gear(path, path_angle, path_reverse_angle):
+                path_angle = path_reverse_angle
+                speed = -1
             path_dist = (dx**2 + dy**2)**0.5
 
             # Compute shoot and turn
             shoot, turn = self.compute_shoot(path_angle)
             # Compute speed
-            speed = self.compute_speed(turn, path_angle, path_dist)
+            speed *= self.compute_speed(turn, path_angle, path_dist)
 
         # If no path was found, do nothing
         else:
@@ -360,6 +365,12 @@ class Agent(object):
             turn = self.defend()
         
         return (turn,speed,shoot)
+
+
+    def allow_reverse_gear(self, path, forward_angle, reverse_angle):
+        """ Is it safe/smart to drive backwards?
+        """
+        return abs(reverse_angle) < abs(forward_angle)
     
     def compute_shoot(self, path_angle):
         """This function returns shoot and turn actions for the agent
