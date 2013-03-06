@@ -75,8 +75,8 @@ class Agent(object):
             return a tuple in the form: (turn, speed, shoot)
         """ 
         # Compute the goal
-        #self.set_goal_sarsa()
-        self.set_goal_hardcoded()
+        self.set_goal_sarsa()
+        # self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -332,6 +332,10 @@ class Agent(object):
         path = []
         for ip in Agent.INTEREST_POINTS:
             if self.goal == Agent.INTEREST_POINTS[ip]:
+                print "ip: " + str(ip)
+                print "self.id: " + str(self.id)
+                print "self.joint_observation.paths: " + str(self.joint_observation.paths)
+                print '\n'
                 path = self.joint_observation.paths[self.id][ip][0]
         
         if not path:
@@ -960,9 +964,11 @@ class JointObservation(object):
             if self.old_state_key != -1:
                 self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
         
+        #REMOVE
         # Update the paths
-        if agent_id == 0:
-            self.paths = {}
+        # if agent_id == 0:
+        #     self.paths = {}
+        print "\nNow updating paths for agent_id " + str(agent_id) + "\n"
         self.paths[agent_id] = find_all_paths(observation.loc, observation.angle, self.interest_points, 
                                 self.mesh, self.grid, self.settings.max_speed, self.settings.max_turn,
                                 self.settings.tilesize)
@@ -1090,10 +1096,15 @@ class JointObservation(object):
                 return 4
 
 
+        #REMOVE
+        print "\nself.paths.iteritems(): \n"
+        for i, j in self.paths.iteritems():
+            print i, j
+            
         # Create the location based on the path distances to all interest points.
         for id, agent_paths in self.paths.iteritems():
             sorted_goal_list = []
-            for goal, path_info in agent_paths:
+            for goal, path_info in agent_paths.iteritems():
                 path_length = path_info[1]
                 sorted_goal_list.append((path_length, goal))
             sorted_goal_list.sort()
@@ -1117,7 +1128,7 @@ class JointObservation(object):
             if cp_distance < am_distance:
                 state.locations[id] = (cp, am)
             else:
-                state.lications[id] = (am, cp)
+                state.locations[id] = (am, cp)
 
 
         # grabs the information from self.friends that is relevant to the state space
