@@ -23,7 +23,7 @@ class Agent(object):
             given for each game.
         """
         
-        self.id = id
+        self.id = NamedInt(id)
         self.team = team
         self.settings = settings
         # self.state_action_pairs = defaultdict(lambda: [None, 10])
@@ -38,18 +38,19 @@ class Agent(object):
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
         self.goal = None
-        self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
+        #self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
+        self.callsign = '%s-%d'% (('DECEPTICON' if team == TEAM_BLUE else 'AUTOBOT'), id)
         self.selected = False
 
         self.blobpath = None
         
         # Read the binary blob, we're not using it though
-        if (not self.joint_observation.state_action_pairs) and (blob is not None):
+        if not self.joint_observation.state_action_pairs and blob is not None:
             # Remember the blob path so we can write back to it
             self.blobpath = blob.name
             self.joint_observation.state_action_pairs = pickle.loads(blob.read())
-            print "Agent %s received binary blob of %s" % (
-                self.callsign, type(self.joint_observation.state_action_pairs))
+            print "%s received binary blob of %s" % (
+                self.id, type(self.joint_observation.state_action_pairs))
             # Reset the file so other agents can read it too.
             blob.seek(0)
 
@@ -75,8 +76,8 @@ class Agent(object):
             return a tuple in the form: (turn, speed, shoot)
         """ 
         # Compute the goal
-        self.set_goal_sarsa()
-        # self.set_goal_hardcoded()
+        # self.set_goal_sarsa()
+        self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -615,7 +616,7 @@ class Agent(object):
             except:
                 # We can't write to the blob, this is normal on AppEngine since
                 # we don't have filesystem access there.        
-                print "Agent %s can't write blob." % self.callsign
+                print "%s can't write blob." % self.id
 
 
 ########################################################################
@@ -796,9 +797,123 @@ class JointObservation(object):
         agents. It should be updated during Agent.observe.
     """
     __metaclass__ = Singleton
+    ascii_red = """
+                        +                             .                         
+  M                     .M                           I.                     M   
+  MM                     MM                         MM.                    MM   
+  NMM.                   DMM.                      MMD                    MMN   
+  .MMM                    MMM                     MMM,                  ,MMM.   
+  .MMMMN                 .MMMM..                 MMMM.                 IMMMM.   
+   MMMMMM                .MMMMMI.               MMMMM                 MMMMMM.   
+   DMMMMMM                MMMMMMO              MMMMMD                MMMMMMM    
+    MMMMMMM.              :MMMMMMM           .MMMMMM.               MMMMMMMM    
+    MMMMMMMM.             .MMMMMMMM.       .,MMMMMMM.             .MMMMMMMM$    
+    MMMMMMMMMM. .         .MMMMMMMMMMMMMMMMMMMMMMMMM.          .:MMMMMMMMMM.    
+    MMMMMMMMMMMMMMMZ..     $MMMMMMMMMMMMMMMMMMMMMMMM     .. 8MMMMMMMMMMMMMM.    
+    ~MMMMMMMMMMMMMMMMMMMN   MMMMMMMMMMMMMMMMMMMMMMM=  .7MMMMMMMMMMMMMMMMMMM     
+     MMMMMMMMMMMMMMMMMMMMMM.MMMMMMMMMMMMMMMMMMMMMMM. MMMMMMMMMMMMMMMMMMMMMN     
+     MMMMMMMMMMMMMMMMMMMMMM.MMMMMMMMMMMMMMMMMMMMMMM OMMMMMMMMMMMMMMMMMMMMM.     
+     MMMMMMMMMMMMMMMMMMMMMM.$MMMMMMMMMMMMMMMMMMMMMM MMMMMMMMMMMMMMMMMMMMMM      
+     .MMMMMMMMMMMMMMMMMMMMMD MMMMMMMMZ    MMMMMMMM: MMMMMMMMMMMMMMMMMMMMMM      
+     .MMMMMMMMO  .  MMMMMMMM.MMMMMMMMM   .MMMMMMMM. MMMMMMMM ... DMMMMMMMM      
+      MMMMMMMMMMMZ. .  ..MMM MMMMMMMMM.  MMMMMMMMM.$MM:.  .. .DMMMMMMMMMM8      
+      MMMMMMMMMMMMMMMMO.    .=MMMMMMMMM .MMMMMMMMM.    .NMMMMMMMMMMMMMMMM,      
+      IMMMMMMMMMMMMMMMMMMMM8. MMMMMMMMM.MMMMMMMMMI.MMMMMMMMMMMMMMMMMMMMMM.      
+      .MMMMMMMMMMMMMMMMMMMMMM.MMMMMMMMMMMMMMMMMMM.,MMMMMMMMMMMMMMMMMMMMMM       
+       MMMMMMMMMMMMMMMMMMMMMM.MMMMMMMMMMMMMMMMMMM.NMMMMMMMMMMMMMMMMMMMMMM       
+       MMMMMMMMM.. OMMMMMMMMM.+MMMMMMMMMMMMMMMMMM MMMMMMMMMM ..MMMMMMMMM~       
+       ,MMMMMMMMMMMM....+MMMM8.MMMMMMMMMMMMMMMMM, MMMMM .  MMMMMMMMMMMMM.       
+        MMMMMMMMMMMMMMMM7   .   MMMMMMMMMMMMMMM$ :.   ~MMMMMMMMMMMMMMMMM.       
+        MMMMMMMMMMMMMMMMMMMMM+ ..MMMMMMMMMMMMM.. .MMMMMMMMMMMMMMMMMMMMM,        
+        .MMMMMMMMMMMMMMMMMMMMMMM. MMMMMMMMMMM. MMMMMMMMMMMMMMMMMMMMMMMO         
+          MMMMMMMMMMMMMMMMMMMMMMM8.OMMMMMMMM .MMMMMMMMMMMMMMMMMMMMMMMM          
+        . .MMMMMMMMIMMMMMMMMMMMMMMM $MMMMMM. MMMMMMMMMMMMMMMMMMMMMMMN           
+        M. .MMMMMMMM    MMMMMMMMMMMM..MMMM.NMMMMMMMMMMMMM= MMMMMMMMM..M         
+        .M  IMMMMMMMM     ..MMMMMMMMM. MO.MMMMMMMMM.      MMMMMMMMM. M.         
+        .MO .MMMMMMMMM       MMMMMMMMM,  MMMMMMMMM       MMMMMMMMM. MM.         
+        .MMI  MMMMMMMMM.      MMMMMMMMMMMMMMMMMMMD    ..MMMMMMMMM  +MM.         
+         MMM.  MMMMMMMMMMM.    MMMMMMMMMMMMMMMMMM    8MMMMMMMMMM  ,MMM.         
+          MMM.  MMMMMMMMMMMMM. NMMMMMMMMMMMMMMMM   MMMMMMMMMMMM?. MMMM          
+          MMMM  .MMMMMMMMMMMMMMOMMMMMMMMMMMMMMMM:MMMMMMMMMMMMMD. MMMM7          
+         .MMMMM  .MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM  MMMMM           
+         .MMMMMM  7MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM .MMMMMM           
+          8MMMMMM  8MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM .MMMMMMM           
+           MMMMMMN. MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM .7MMMMMMM           
+          .MMMMMMM,  MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM. ,MMMMMMM,           
+           MMMMMMMM.  MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM.  MMMMMMMM            
+           DMMMMMMMM. .MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM, .MMMMMMMMM            
+           .MMMMMMMMM.  MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM  MMMMMMMMMM.           
+           .MMMMMMMMMM. =MMMMMMMMMMMMMMMMMMMMMMMMMMMMMM  MMMMMMMMMMM            
+           .MMMMMMMMMMM..8MMMMMMMMMMMMMMMMMMMMMMMMMMMM  NMMMMMMMMMMI            
+            MMMMMMMMMMMM .MMMMMMMMMMMMMMMMMMMMMMMMMMM  =MMMMMMMMMMM.            
+            ~MMMMMMMMMMM7  MMMMMMMMMMMMMMMMMMMMMMMMM  :MMMMMMMMMMMM.            
+            .MMMMMMMMMMMM= .MMMMMMMMMMMMMMMMMMMMMMM  .MMMMMMMMMMMMM             
+            .MMMMMMMMMMMMM  .MMMMMMMMMMMMMMMMMMMMM. .MMMMMMMMMMMMMM             
+             MMMMMMMMMMMMMM.  MMMMMMMMMMMMMMMMMMM=. MMMMMMMMMMMMMM.             
+             ~MMMMMMMMMMMMMM .+MMMMMMMMMMMMMMMMMI. MMMMMMMMMMMMMMM.             
+              MMMMMMMMMMMMMMM  $MMMMMMMMMMMMMMMM  MMMMMMMMMMMMMMMM              
+                 MMMMMMMMMMMMM  MMMMMMMMMMMMMMM. IMMMMMMMMMMMMMM..              
+                   :MMMMMMMMMMO  MMMMMMMMMMMMM  :MMMMMMMMMMMM+..                
+                     .MMMMMMMMM7  MMMMMMMMMMM ..MMMMMMMMMM~                     
+                       . MMMMMMM.  MMMMMMMMM   MMMMMMMM~                        
+                            MMMMM...MMMMMMM   MMMMMM..                          
+                              .MMM  .MMMMM   MMMM.                              
+                                  M   MMMZ .NM~                                 
+                                      :M8  ..                                   
+                                       .
+"""
+    ascii_blue = """
+                          ZZZZZZZZZZZZZZZZZZZZZZZZZZZ.                          
+                    ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ                     
+    .ZZZZZZZZZ  ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ  ZZZZZZZZZ?     
+     ZZZZZZZZZZ ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ ZZZZZZZZZZ      
+     ZZZZZZZZZZ ?ZZZZZZZZZZZZZZZZZZZZ:   .ZZZZZZZZZZZZZZZZZZZZZ ZZZZZZZZZZ      
+      ZZZZZZZZZZ ZZZZZZZZZZZZZZ.                ZZZZZZZZZZZZZZ  ZZZZZZZZZ       
+      ZZZZZZZZZZ =ZZZZZZZZZZZZZZZZZ         ZZZZZZZZZZZZZZZZZZ ZZZZZZZZZZ       
+      ZZZZZZZZZZZ   7ZZZZZZZZZZZZZZZZZ  .ZZZZZZZZZZZZZZZZZZ   7ZZZZZZZZZZ       
+       ZZZZZ+ZZZZZZZ    ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ    ZZZZZZZ7ZZZZZ        
+       ZZZZZZ   ZZZZZZZZ    ZZZZZZZZZZZZZZZZZZZZZZZ    ZZZZZZZZ   $ZZZZZ        
+       IZZZZZZZZ   ,ZZZZZZZ.    ZZZZZZZZZZZZZZZ     ZZZZZZZZ   $ZZZZZZZZ        
+        ZZZZZZZZZZZ   .ZZZZZZZ,    ,ZZZZZZZZ     ZZZZZZZ=   ZZZZZZZZZZZ+        
+        ZZZZZZ=ZZZZZZZ,   ZZZZZ ZZZ    =    ZZZ ZZZZZ   .ZZZZZZZZZZZZZZ         
+        ZZZZZZ~   ZZZZZZZZ ZZZZ  ZZZZZZ ZZZZZZ. ZZZZIZZZZZZZZ    ZZZZZZ         
+         ZZZZZZZZ=   ZZZZZZZZZZZ ZZZZZZZZZZZZZ  ZZZZZZZZZZ   ,ZZZZZZZZ          
+         ZZZZZZZZZZZZ   ,ZZZZZZZ ZZZZZZZZZZZZZ ZZZZZZZ=   ZZZZZZZZZZZZ          
+           ZZZZZZZZZZZZZ=  ~ZZZZ  ZZZZZZZZZZZ  ZZZZZ  .ZZZZZZZZZZZZZ            
+          Z  ZZZZZZZZZZZZZZZZZZZ  ZZZZZZZZZZZ  ZZZZ.ZZZZZZZZZZZZZZ  Z           
+          ZZZ  ZZZZZZZZZZZZZZZZZZ ZZZZZZZZZZZ ZZZZZZZZZZZZZZZZZZ  ZZZ           
+          ZZZZZ  ZZZZZZZZZZZZZZZZ  ZZZZZZZZZ  ZZZZZZZZZZZZZZZZ  ZZZZZ           
+          ZZZZZZ                   ZZZZZZZZZ                   ZZZZZZ           
+          ZZZZZZ                   ZZZZZZZZZ                   ZZZZZZ           
+          ZZZZZZZ                  ZZZZZZZZZ                  ZZZZZZZ           
+          :ZZZZZZ               ZZ ZZZZZZZZZ ZZ               ZZZZZZZ           
+           ZZZZZZZZZ          ZZZZ ZZZZZZZZZ ZZZZ          7ZZZZZZZZ:           
+           ZZZZZZZZZZZZ     ZZZZZZ ZZZZZZZZZ ZZZZZZ     ZZZZZZZZZZZZ            
+           ZZZZZZZZZZZZZZ= ZZZZZZZ ZZZZZZZZZ ZZZZZZZ  ZZZZZZZZZZZZZZ            
+           ZZZZZZZZZZZZZZ= ZZZZZZZ ZZZZZZZZZ ZZZZZZZ  ZZZZZZZZZZZZZZ            
+           ZZZZZZZZZZZZZZ= ZZZZZZZ ZZZZZZZZZ ZZZZZZZ  ZZZZZZZZZZZZZZ            
+           ZZZZZZZZZZZZZZ= ZZZZZZZ ZZZZZZZZZ ZZZZZZZ  ZZZZZZZZZZZZZZ            
+           ?ZZZZZZZZZZZZZ= ZZZZZZZ ZZZZZZZZZ ZZZZZZZ  ZZZZZZZZZZZZZZ            
+            ZZZZZZZZZZZZZ= ZZZZZZZ ZZZZZZZZZ ZZZZZZZ  ZZZZZZZZZZZZZZ            
+            ZZZZZZZZZZZZZ= ZZZZZZZ ZZZZZZZZZ ZZZZZZZ  ZZZZZZZZZZZZZ=            
+            ZZZZZZZZZZZZZ= ZZZZZZZ           ZZZZZZZ  ZZZZZZZZZZZZZ             
+            ZZZZZZZZZZZZZ= ZZZZZZZZZZZZZZZZZZZZZZZZZ  ZZZZZZZZZZZZZ             
+            ZZZZZZZZZZZZZ= ZZZZZZZZZZZZZZZZZZZZZZZZZ  ZZZZZZZZZZZZZ             
+            ZZZZZZZZZZZZZ= ZZZZZZZZZZZZZZZZZZZZZZZZZ  ZZZZZZZZZZZZZ             
+             ZZZZZZZZZZZZ= ZZZZZZ             ZZZZZZ  ZZZZZZZZZZZZ              
+                .ZZZZZZZZ= ZZZZZZ +ZZZZZZZZZZ ZZZZZZ  ZZZZZZZZ,                 
+                    ZZZZZ= ZZZZZZ ZZZZZZZZZZZ ZZZZZZ  ZZZZZ
+                       =Z= ZZZZZZ ZZZZZZZZZZZ ZZZZZZ  ZZ
+                           ZZZZZ  ZZZZZZZZZZZ  ZZZZZ
+                               Z ,ZZZZZZZZZZZZ Z
+                                 ZZZZZZZZZZZZZ
+"""
 
     def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents, interest_pts):
-        
+        if team == TEAM_BLUE:
+            print JointObservation.ascii_blue
+        else:
+            print JointObservation.ascii_red
         self.interest_points = interest_pts
         self.team = team        
         self.grid = grid
@@ -1166,3 +1281,17 @@ class State(object):
     def toKey(self):
         key = str(self.locations) + str(self.respawning) + str(self.has_ammo) + str(self.control_points)
         return key
+
+
+class NamedInt(int):
+    """ Show an Autobot or Decepticon themed name, depending on the team.
+
+    This will be printed instead of the agent id.
+    """
+    NAMES = ["Megatron", "Starscream", "Blitzwing",
+             "Optimus Prime", "Bumblebee", "Bulkhead"]
+    def __init__(self, *args, **kwargs):
+        int.__init__(self, *args, **kwargs)
+
+    def __str__(self):
+        return NamedInt.NAMES[self % len(NamedInt.NAMES)]
