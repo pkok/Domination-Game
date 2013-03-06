@@ -906,11 +906,11 @@ class JointObservation(object):
         print "JointObservation.joint_actions: " + str(self.joint_actions)
         
         # Keep track of paths to interest points for each agent at each timestep
-        self.paths = [] # [{'cp1':(path,length), ..}, ...]
+        self.paths = {} # agent_id: {'cp1':(path,length), ..}
         # Keep track of each agent's goal
         self.goals = [] # [agent0_goal, agent1_goal, ...]
         # Keep track of actions from other agents during each timestep
-        self.actions = {} # [(turn, speed, shoot), ...]
+        self.actions = {} # agent_id: (turn, speed, shoot)
 
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
