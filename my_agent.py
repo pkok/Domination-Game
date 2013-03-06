@@ -1036,6 +1036,7 @@ class JointObservation(object):
         if difference > 0:
             reward = difference
         else:
+            reward = 0
             for agent_id, agentRegion in zip(sorted(self.friends), sorted(self.state.locations.values())):
                 if self.ammo[agent_id] > 0 and (agentRegion == 2 or agentRegion == 12):
                     reward += 1
