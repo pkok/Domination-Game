@@ -332,10 +332,6 @@ class Agent(object):
         path = []
         for ip in Agent.INTEREST_POINTS:
             if self.goal == Agent.INTEREST_POINTS[ip]:
-                print "ip: " + str(ip)
-                print "self.id: " + str(self.id)
-                print "self.joint_observation.paths: " + str(self.joint_observation.paths)
-                print '\n'
                 path = self.joint_observation.paths[self.id][ip][0]
         
         if not path:
@@ -902,8 +898,6 @@ class JointObservation(object):
         # Create a list of all possible joint actions
         interestRegions = self.ROI["cp"] + self.ROI["am"]
         self.joint_actions = list(product(interestRegions, repeat=self.number_of_agents))
-        print "JointObservation.friends: " + str(self.friends)
-        print "JointObservation.joint_actions: " + str(self.joint_actions)
         
         # Keep track of paths to interest points for each agent at each timestep
         self.paths = {} # agent_id: {'cp1':(path,length), ..}
@@ -964,11 +958,6 @@ class JointObservation(object):
             if self.old_state_key != -1:
                 self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
         
-        #REMOVE
-        # Update the paths
-        # if agent_id == 0:
-        #     self.paths = {}
-        print "\nNow updating paths for agent_id " + str(agent_id) + "\n"
         self.paths[agent_id] = find_all_paths(observation.loc, observation.angle, self.interest_points, 
                                 self.mesh, self.grid, self.settings.max_speed, self.settings.max_turn,
                                 self.settings.tilesize)
@@ -1097,11 +1086,6 @@ class JointObservation(object):
                 return 4
 
 
-        #REMOVE
-        print "\nself.paths.iteritems(): \n"
-        for i, j in self.paths.iteritems():
-            print i, j
-            
         # Create the location based on the path distances to all interest points.
         for id, agent_paths in self.paths.iteritems():
             sorted_goal_list = []
