@@ -376,7 +376,6 @@ class Agent(object):
         #observe_all_foes = len(self.joint_observation.foes) == self.number_of_agents
         nearby_foes = False
         for foe in self.joint_observation.foes[self.joint_observation.step]:
-            print str(foe) + "  " + str(loc)
             if not line_intersects_grid(self.obs.loc, foe[:2], self.grid, self.settings.tilesize):
                 nearby_foes = True
                 break
