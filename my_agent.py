@@ -861,17 +861,19 @@ class JointObservation(object):
         self.settings = settings
 
         self.step = -1 # current timestep
+
         # Per-agent data, stored in a namedtuple.
         self.friends = {} # agent_id: (x, y, angle, ammo, collided, respawn_in, hit)
 
         # Keeps track of the position of foe positions sorted per timestep
         self.foes = {} # step: {(x, y, angle), ...}
 
-        # Lists all control point positions, which team is controlling it, and
-        # when it has been observed for the last time.
-        self.cps = {} # (x, y): (dominating_team, last_seen)
+        # Lists all control point positions, and which team is controlling them.
+        self.cps = {} # (x, y, dominating_team)
+
         # Objects seen by the agents, together with the last time seen.
         self.objects = defaultdict(lambda: [-1, -1]) # (x, y, type): last_seen, disappeared_since
+
         # Walls that can be seen by the agents
         self.walls = defaultdict(set) # (x, y): {agent_id, ...}
 
@@ -924,8 +926,7 @@ class JointObservation(object):
                 observation.respawn_in, observation.hit)
         for foe in observation.foes:
             self.foes[self.step].add(foe)
-        for cp in observation.cps:
-            self.cps[cp[:2]] = cp[-1], self.step
+        self.cp = observation.cps
         for obj in set(self.objects.keys() + observation.objects):
             distance = ((obj[0] - observation.loc[0]) ** 2 +
                        (obj[1] - observation.loc[1]) ** 2) ** 0.5
@@ -1022,36 +1023,6 @@ class JointObservation(object):
                     joint_action = action
         self.new_joint_action = joint_action
 
-
-    # def setReward(self):
-    #     """ Compute the current reward.
-    #     """
-    #     reward = 0
-    #     difference = self.score[0] - self.score[1]
-    #     """ Not used so far but maybe in the future.
-    #     lastDifference = observation.score[0] - observation.score[1]
-    #     """
-
-    #     roi = self.ROI["cp"] + self.ROI["am"]
-    #     if self.team == TEAM_RED:
-    #         if difference > 0:
-    #             reward = difference
-    #         else:
-    #             for userRegion in self.state.locations["regions"]:
-    #                 if userRegion in roi:
-    #                     reward += 1
-    #                     break
-    #     elif self.team == TEAM_BLUE:
-    #         if difference < 0:
-    #             reward = -difference
-    #         else:
-    #             for userRegion in self.state.locations["regions"]:
-    #                 if userRegion in roi:
-    #                     reward += 1
-    #                     break
-
-    #     self.reward = reward
-
     
     def setReward(self):
         difference = self.diff_score[0] if self.team == TEAM_RED else self.diff_score[1]
@@ -1059,7 +1030,7 @@ class JointObservation(object):
         if difference > 0:
             reward = difference
         else:
-            for agent_id, agentRegion in zip(self.friends, self.state.locations["regions"]):
+            for agent_id, agentRegion in zip(sorted(self.friends), sorted(self.state.locations.values())):
                 if self.ammo[agent_id] > 0 and (agentRegion == 2 or agentRegion == 12):
                     reward += 1
                 if self.ammo[agent_id] == 0 and (agentRegion == 2 or agentRegion == 12):
@@ -1117,86 +1088,53 @@ class JointObservation(object):
                 return 3
             elif value <= 15:
                 return 4
-        
-        agent_regions = ()
-        agent_directions = ()
-        agent_timers = ()
-        agent_ammo = ()
-        # agent_id: (x, y, angle, ammo, collided, respawn_in, hit)
-        for key, val in sorted(self.friends.iteritems()):
-            agent_regions = agent_regions + (in_region(self, val.x, val.y),) #friends[0,1]
-            agent_directions = agent_directions + (angle_to_wd(val.angle),) #friends[2]
-            agent_timers = agent_timers + (timer_range(val.respawn_in),)
-            agent_ammo = agent_ammo + (False if val.ammo == 0 else True,)
-        state.locations["regions"] = agent_regions    # 15 regions * agents
-        state.orientations["direction"] = agent_directions 
-        state.death_timers["timer"] = agent_timers #friends[5]
-        state.has_ammo["ammo"] = agent_ammo #friends[3]
 
-        # (x, y): (dominating_team, last_seen)
-        # (cp_top =  216, 56)
-        # (cp_bottom =  248, 216)
-        # check if dominating_team is own team,
-        # and check for difference in score if one is unknown
-        # if (self.cps["()"])
-        # self.diff_score = (0, 0)
-        cp_state = ()
-        cp_positions = sorted(self.cps.keys(), key=lambda x: x[1])
-        cp_top = cp_positions[-1]
-        cp_bottom = cp_positions[0]
-        cp_top_state = cp_top[0] == self.team
-        cp_bottom_state = cp_bottom[0] == self.team
-        # cases in which the score tells all
-        if self.diff_score == (-2,2):
-            cp_state = (False, False) if self.team == TEAM_RED else (True, True)
-        elif self.diff_score == (2,-2):
-            cp_state = (False, False) if self.team == TEAM_BLUE else (True, True)
-        # case in which score gives info about last seen
-        else:
-            if self.team == TEAM_RED:
-                cp_state = (cp_top_state, cp_bottom_state)
+
+        # Create the location based on the path distances to all interest points.
+        for id, agent_paths in self.paths.iteritems():
+            sorted_goal_list = []
+            for goal, path_info in agent_paths:
+                path_length = path_info[1]
+                sorted_goal_list.append((path_length, goal))
+            sorted_goal_list.sort()
+
+            # Get the nearest cp and am elements
+            cp_distance = 0
+            cp = ""
+            am_distance = 0 
+            am = ""
+            for distance, cp in sorted_goal_list:
+                if cp[:2] == "cp":
+                    cp_distance = distance
+                    break
+
+            for distance, am in sorted_goal_list:
+                if am[:2] == "am":
+                    am_distance = distance
+                    break
+            
+            # Add tuple to locations to state
+            if cp_distance < am_distance:
+                state.locations[id] = (cp, am)
             else:
-                cp_state = (cp_bottom_state, cp_top_state)
+                state.lications[id] = (am, cp)
 
-        state.control_points["cp"] = cp_state
+
+        # grabs the information from self.friends that is relevant to the state space
+        for key, val in self.friends.iteritems():
+            #state.locations[key]    = in_region(self, val.x, val.y)
+            #state.orientations[key] = angle_to_wd(val.angle)
+            state.respawning[key]   = False if val.respawn_in <= 0 else True
+            state.has_ammo[key]     = False if val.ammo == 0 else True
         
-        if cp_state == (False, False):
-            if self.settings.max_steps - self.step <= 20 and self.score[0] < 50:
-                state.final_stand = True
-            elif self.score[0] < 20:
-                state.final_stand = True
-        else:
-            state.final_stand = False
-        
-        # (x, y, type): last_seen, disappeared_since
-        # if unknown estimate 0.5 times max_timer
-        ammo_missing = ()
-        ammo_spawn_range = ()
+        # Represent the status of the control points
+        cp_amount = len(self.cps)
+        for cpx, cpy, val in sorted(self.cps.iteritems()):
+            if val == self.team:
+                state.control_points[(cpx, cpy)] = True
+            else:
+                state.control_points[(cpx, cpy)] = False
 
-        # Make a list of the ammo spawn info. Reverse the items in this list if team == BLUE.
-        ammoList = []
-        for key, value in sorted(self.objects.iteritems()):
-            ammoList.append((key,value))
-        if self.team == TEAM_BLUE:
-            ammoList.reverse()
-
-        for key, value in ammoList:
-            if key[2] == "Ammo": 
-                ammo_spawns_in = timer_range((value[1] + value[0] +1)/2 + self.settings.ammo_rate - self.step)
-                #ammo was last seen
-                if value[0] > value[1]:
-                    ammo_missing = ammo_missing + (False,)
-                    ammo_spawn_range = ammo_spawn_range + (0,)
-                #grabbed it ourselves or saw it get grabbed
-                elif value[1] > value[0] and ammo_spawns_in > 0: 
-                    ammo_missing = ammo_missing + (True,)
-                    ammo_spawn_range = ammo_spawn_range + (ammo_spawns_in,)
-                elif ammo_spawns_in == 0:
-                    ammo_missing = ammo_missing + (False,)
-                    ammo_spawn_range = ammo_spawn_range + (ammo_spawns_in,)
-                    
-        state.ammo_timer["ammo"] = ammo_spawn_range
-        state.ammoRespawning["ammo"] = ammo_missing
         return state
 
 
@@ -1224,103 +1162,11 @@ class State(object):
         ##### Feature parameter initializations ################################
         ########################################################################
 
-        self.locations = defaultdict(tuple)    # 15 regions * agents
-        self.orientations = defaultdict(tuple)
-        self.death_timers = defaultdict(tuple)
+        self.locations = defaultdict(tuple)
+        self.respawning = defaultdict(bool)
         self.has_ammo = defaultdict(bool)
-        self.final_stand = False
         self.control_points = defaultdict(bool)
-        self.ammo_timer = defaultdict(tuple)
-        self.ammoRespawning = defaultdict(bool)
 
     def toKey(self):
-        key = str(self.locations) + str(self.orientations) + str(self.death_timers) + str(self.has_ammo) + str(self.final_stand) + str(self.control_points) + str(self.ammo_timer) + str(self.ammoRespawning)
+        key = str(self.locations) + str(self.respawning) + str(self.has_ammo) + str(self.control_points)
         return key
-
-
-########################################################################
-##### JointAction class ################################################
-########################################################################
-
-class JoinAction(object):
-
-    # Our strategies define the % of bots that go for certain goals.
-
-    # strategies =  "Name"      :  % CP     , % AM
-
-
-
-    
-    '''
-    low_level_strats_full_offense =  {"fo01"	: ("Agent1","cp1","Agent2","cp1","Agent3","cp1"),
-									  "fo02"	: ("Agent1","cp1","Agent2","cp1","Agent3","cp2"),
-									  "fo03"	: ("Agent1","cp1","Agent2","cp2","Agent3","cp1"),
-									  "fo04"	: ("Agent1","cp1","Agent2","cp2","Agent3","cp2"),
-									  "fo05"	: ("Agent1","cp2","Agent2","cp1","Agent3","cp1"),
-									  "fo06"	: ("Agent1","cp2","Agent2","cp1","Agent3","cp2"),
-									  "fo07"	: ("Agent1","cp2","Agent2","cp2","Agent3","cp1"),
-									  "fo08"	: ("Agent1","cp2","Agent2","cp2","Agent3","cp2")
-									 }
-
-    low_level_strats_normal_offense =  {"no01"	: ("Agent1","cp1","Agent2","cp1","Agent3","am1"),
-										"no02"	: ("Agent1","cp1","Agent2","cp1","Agent3","am2"),
-										"no03"	: ("Agent1","cp1","Agent2","cp2","Agent3","am1"),
-										"no04"	: ("Agent1","cp1","Agent2","cp2","Agent3","am2"),
-										"no05"	: ("Agent1","cp2","Agent2","cp1","Agent3","am1"),
-										"no06"	: ("Agent1","cp2","Agent2","cp1","Agent3","am2"),
-										"no07"	: ("Agent1","cp2","Agent2","cp2","Agent3","am1"),
-										"no08"	: ("Agent1","cp2","Agent2","cp2","Agent3","am2"),
-										"no09"	: ("Agent1","cp1","Agent2","am1","Agent3","cp1"),
-										"no10"	: ("Agent1","cp1","Agent2","am2","Agent3","cp1"),
-										"no11"	: ("Agent1","cp1","Agent2","am1","Agent3","cp2"),
-										"no12"	: ("Agent1","cp1","Agent2","am2","Agent3","cp2"),
-										"no13"	: ("Agent1","cp2","Agent2","am1","Agent3","cp1"),
-										"no14"	: ("Agent1","cp2","Agent2","am2","Agent3","cp1"),
-										"no15"	: ("Agent1","cp2","Agent2","am1","Agent3","cp2"),
-										"no16"	: ("Agent1","cp2","Agent2","am2","Agent3","cp2"),
-										"no17"	: ("Agent1","am1","Agent2","cp1","Agent3","cp1"),
-										"no18"	: ("Agent1","am2","Agent2","cp1","Agent3","cp1"),
-										"no19"	: ("Agent1","am1","Agent2","cp1","Agent3","cp2"),
-										"no20"	: ("Agent1","am2","Agent2","cp1","Agent3","cp2"),
-										"no21"	: ("Agent1","am1","Agent2","cp2","Agent3","cp1"),
-										"no22"	: ("Agent1","am2","Agent2","cp2","Agent3","cp1"),
-										"no23"	: ("Agent1","am1","Agent2","cp2","Agent3","cp2"),
-										"no24"	: ("Agent1","am2","Agent2","cp2","Agent3","cp2")
-									   }
-									   
-    low_level_strats_ammo =  {"am01"	: ("Agent1","am1","Agent2","am1","Agent3","cp1"),
-							  "am02"	: ("Agent1","am1","Agent2","am1","Agent3","cp2"),
-							  "am03"	: ("Agent1","am1","Agent2","am2","Agent3","cp1"),
-							  "am04"	: ("Agent1","am1","Agent2","am2","Agent3","cp2"),
-							  "am05"	: ("Agent1","am2","Agent2","am1","Agent3","cp1"),
-							  "am06"	: ("Agent1","am2","Agent2","am1","Agent3","cp2"),
-							  "am07"	: ("Agent1","am2","Agent2","am2","Agent3","cp1"),
-							  "am08"	: ("Agent1","am2","Agent2","am2","Agent3","cp2"),
-							  "am09"	: ("Agent1","am1","Agent2","cp1","Agent3","am1"),
-							  "am10"	: ("Agent1","am1","Agent2","cp2","Agent3","am1"),
-							  "am11"	: ("Agent1","am1","Agent2","cp1","Agent3","am2"),
-							  "am12"	: ("Agent1","am1","Agent2","cp2","Agent3","am2"),
-							  "am13"	: ("Agent1","am2","Agent2","cp1","Agent3","am1"),
-							  "am14"	: ("Agent1","am2","Agent2","cp2","Agent3","am1"),
-							  "am15"	: ("Agent1","am2","Agent2","cp1","Agent3","am2"),
-							  "am16"	: ("Agent1","am2","Agent2","cp2","Agent3","am2"),
-							  "am17"	: ("Agent1","cp1","Agent2","am1","Agent3","am1"),
-							  "am18"	: ("Agent1","cp2","Agent2","am1","Agent3","am1"),
-							  "am19"	: ("Agent1","cp1","Agent2","am1","Agent3","am2"),
-							  "am20"	: ("Agent1","cp2","Agent2","am1","Agent3","am2"),
-							  "am21"	: ("Agent1","cp1","Agent2","am2","Agent3","am1"),
-							  "am22"	: ("Agent1","cp2","Agent2","am2","Agent3","am1"),
-							  "am23"	: ("Agent1","cp1","Agent2","am2","Agent3","am2"),
-							  "am24"	: ("Agent1","cp2","Agent2","am2","Agent3","am2")
-							 }
-	
-    low_level_strats_full_ammo =  {"fa01"	: ("Agent1","am1","Agent2","am1","Agent3","am1"),
-								   "fa02"	: ("Agent1","am1","Agent2","am1","Agent3","am2"),
-								   "fa03"	: ("Agent1","am1","Agent2","am2","Agent3","am1"),
-								   "fa04"	: ("Agent1","am1","Agent2","am2","Agent3","am2"),
-								   "fa05"	: ("Agent1","am2","Agent2","am1","Agent3","am1"),
-								   "fa06"	: ("Agent1","am2","Agent2","am1","Agent3","am2"),
-								   "fa07"	: ("Agent1","am2","Agent2","am2","Agent3","am1"),
-								   "fa08"	: ("Agent1","am2","Agent2","am2","Agent3","am2")
-								  }
-    '''
