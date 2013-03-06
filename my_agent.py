@@ -608,7 +608,7 @@ class Agent(object):
             interrupt (CTRL+C) by the user. Use it to
             store any learned variables and write logs/reports.
         """
-        if self.id == 0 and self.blobpath is not None:
+        if self.id == 0 and hasattr(self, 'blobpath') and self.blobpath is not None:
             try:
                 # We simply write the same content back into the blob.
                 # in a real situation, the new blob would include updates to 
