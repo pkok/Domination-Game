@@ -547,15 +547,23 @@ class Agent(object):
         else:
             new_angle = -math.pi
         
-        # If foes are nearby, face the foe that requires the least turning to face
+        # For the foes that either
+        #     - have a line of sight and can reach you within 3 steps, or
+        #     - can reach you with the least steps,
+        # face the foe that requires the least turning to face.
         req_turn = 2*math.pi
         foe_path = {}
         for foe in self.joint_observation.foes[self.joint_observation.step]:
             foe_path[foe] = find_single_path(foe[:2], foe[2], self.obs.loc, self.mesh, self.grid,
                     self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
-        foe_path = sorted(foe_path.items(), key=lambda item: len(item[1]))
-        nearest_foes = filter(lambda item: item[1] == foe_path[0][1], foe_path)
-        for foe in nearest_foes:
+        foe_path_ = sorted(foe_path.items(), key=lambda item: len(item[1]))
+        nearest_foes = filter(lambda item: item[1] == foe_path_[0][1], foe_path)
+        dangerous_foe = []
+        for foe in self.joint_observation.foes[self.joint_observation.step]:
+            if not line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
+                if len(foe_path[foe]) < 3:
+                    dangerous_foe.append(foe)
+        for foe in set(dict(nearest_foes).keys()).union(dangerous_foe):
             dx = foe[0] - self.obs.loc[0]
             dy = foe[1] - self.obs.loc[1]
             foe_angle = math.atan2(dy, dx)
@@ -582,7 +590,7 @@ class Agent(object):
             surface.fill((0,0,0,0))    
         
         color = ((255,0,0), (0,255,0), (0,0,255))
-        pygame.draw.circle(surface, color[self.id % len(color)], self.obs.loc, 2)
+        pygame.draw.circle(surface, color[self.id % len(color)], self.obs.loc, 1)
         # Selected agents draw their info
         if self.selected:
             # Draw line directly to goal
