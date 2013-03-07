@@ -537,6 +537,7 @@ class Agent(object):
     def defend(self):
         """ Returns the turn an agent should to to defend a point on the map
         """
+        print "%s is defending" % self.id
         # Determine new angle the agent should be at
         new_angle = 0.0
         
@@ -548,7 +549,7 @@ class Agent(object):
         
         # If foes are nearby, face the foe that requires the least turning to face
         req_turn = 2*math.pi
-        for foe in self.obs.foes:
+        for foe in self.joint_observation.foes[self.joint_observation.step]:
             if not line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
                 dx = foe[0] - self.obs.loc[0]
                 dy = foe[1] - self.obs.loc[1]
@@ -575,6 +576,8 @@ class Agent(object):
         if self.id == 0:
             surface.fill((0,0,0,0))    
         
+        color = ((255,0,0), (0,255,0), (0,0,255))
+        pygame.draw.circle(surface, color[self.id % len(color)], self.obs.loc, 2)
         # Selected agents draw their info
         if self.selected:
             # Draw line directly to goal
@@ -706,6 +709,10 @@ def find_single_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math
     for n in mesh:
         if not start == n and line_intersects_grid(start,n[0:2],grid,tilesize):
             start_list.append((n, calc_cost(start_angle,n,max_speed,max_angle)))
+    if start_angle not in mesh:
+        remove_start_node = True
+    else:
+        remove_start_node = False
     mesh[start_angle] = dict(start_list)
     
     # Plan path
@@ -716,7 +723,8 @@ def find_single_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math
     nodes, length = astar(start_angle, neighbours, goal, 0, cost, heuristic)
 
     # Remove temp nodes for start and end from mesh
-    del mesh[start_angle]
+    if remove_start_node:
+        del mesh[start_angle]
     if not end in mesh:
         for n in mesh:
             if mesh[n].has_key(end):
@@ -736,6 +744,10 @@ def find_all_paths(start, angle, ends, mesh, grid, max_speed=40, max_angle=math.
     for n in mesh:
         if not n == start and not line_intersects_grid(start,n[0:2],grid,tilesize):
             start_list.append((n, calc_cost(start_angle,n,max_speed,max_angle)))
+    if start_angle not in mesh:
+        remove_start_node = True
+    else:
+        remove_start_node = False
     mesh[start_angle] = dict(start_list)
     
     path_dict = {}
@@ -757,7 +769,8 @@ def find_all_paths(start, angle, ends, mesh, grid, max_speed=40, max_angle=math.
             path_dict[end_point] = (nodes, length)
         
     # Remove temp nodes for start
-    del mesh[start_angle]
+    if remove_start_node:
+        del mesh[start_angle]
 
     # Return path dictionary
     return path_dict
