@@ -549,16 +549,21 @@ class Agent(object):
         
         # If foes are nearby, face the foe that requires the least turning to face
         req_turn = 2*math.pi
+        foe_path = {}
         for foe in self.joint_observation.foes[self.joint_observation.step]:
-            if not line_intersects_grid(self.obs.loc, foe[0:2], self.grid, self.settings.tilesize):
-                dx = foe[0] - self.obs.loc[0]
-                dy = foe[1] - self.obs.loc[1]
-                foe_angle = math.atan2(dy, dx)
-                req_turn_foe = angle_fix(foe_angle - self.obs.angle)
-                
-                if abs(req_turn_foe) < abs(req_turn):
-                    req_turn = req_turn_foe
-                    new_angle = foe_angle 
+            foe_path[foe] = find_single_path(foe[:2], foe[2], self.obs.loc, self.mesh, self.grid,
+                    self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
+        foe_path = sorted(foe_path.items(), key=lambda item: len(item[1]))
+        nearest_foes = filter(lambda item: item[1] == foe_path[0][1], foe_path)
+        for foe in nearest_foes:
+            dx = foe[0] - self.obs.loc[0]
+            dy = foe[1] - self.obs.loc[1]
+            foe_angle = math.atan2(dy, dx)
+            req_turn_foe = angle_fix(foe_angle - self.obs.angle)
+            
+            if abs(req_turn_foe) < abs(req_turn):
+                req_turn = req_turn_foe
+                new_angle = foe_angle 
         
         # Calculate how the agent should turn to face the new angle
         return angle_fix(new_angle - self.obs.angle)
