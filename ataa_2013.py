@@ -64,7 +64,7 @@ class Tournament1(scenarios.Scenario):
                               think_time=0.06,)
 
 class Tournament2(scenarios.Scenario):
-    REPEATS   = 100
+    REPEATS   = 10
     GENERATOR = None
     FIELD     = core.Field.from_string(FIELD2)
     SETTINGS  = core.Settings(max_steps=300,
@@ -99,13 +99,17 @@ if __name__ == '__main__':
 
     if args.save_blob != '':
         copyfile('my_agent_blob', 'my_agent_blob_' + args.save_blob)
+        "Saved old blob as: my_agent_blob_" + args.save_blob
 
     if args.new_blob == True:
+        print "Deleted old blob. New blob added."
         state_action_pairs = {}
         blobfile = open("my_agent_blob", 'wb')
         pickle.dump(state_action_pairs, blobfile, pickle.HIGHEST_PROTOCOL)
+        blobfile.close()
 
     if args.test == True:
+        # Waarom savet de agents alleen zijn blobs in test mode???????
         Tournament2.test(red="my_agent.py", blue="domination/agent.py")
     else:
         now = datetime.datetime.now()
