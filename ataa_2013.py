@@ -64,7 +64,7 @@ class Tournament1(scenarios.Scenario):
                               think_time=0.06,)
 
 class Tournament2(scenarios.Scenario):
-    REPEATS   = 10
+    REPEATS   = 1
     GENERATOR = None
     FIELD     = core.Field.from_string(FIELD2)
     SETTINGS  = core.Settings(max_steps=300,
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--new_blob', action='store_true')
     parser.add_argument('-t', '--test', action='store_true')
     parser.add_argument('-v', '--visuals', action='store_true')
-    parser.add_argument('-r', '--repeats', type=int, default=100)  ## Hoe dit doorgeven aan class Tournament2??
+    parser.add_argument('-r', '--repeats', type=int, default=100)  ## TODO: Dit doorgeven aan class Tournament2. Hoe?
     args = parser.parse_args(sys.argv[1:])
 
     if args.save_blob != '':
@@ -109,8 +109,8 @@ if __name__ == '__main__':
         blobfile.close()
 
     if args.test == True:
-        # Waarom savet de agents alleen zijn blobs in test mode???????
-        Tournament2.test(red="my_agent.py", blue="domination/agent.py")
+        # TOD: Waarom savet de agents alleen zijn blobs in test mode? Should be fixed!
+        Tournament2.test(red=args.red_agent, blue=args.blue_agent)
     else:
         now = datetime.datetime.now()
         folder = os.path.join('tournaments', now.strftime("%Y%m%d-%H%M"))
