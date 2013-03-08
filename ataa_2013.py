@@ -4,6 +4,7 @@ import sys
 import math
 import os
 import datetime
+import argparse
 from domination import core, scenarios
 
 FIELD1 = """
@@ -81,11 +82,15 @@ class Tournament2(scenarios.Scenario):
 # preserved. Please refer to "Running a Game" in the documentation for how
 # to set up your own learning environment.
 if __name__ == '__main__':
-    # TODO: use argparse to set rendered true/false
-    if len(sys.argv) == 1:
+
+    # Use the -t flag to run a single rendered game. Otherwise run full tournament.
+    parser = argparse.ArgumentParser(description='Process test flag.')
+    parser.add_argument('-t', '--test', action='store_true')
+    args = parser.parse_args(sys.argv[1:])
+
+    if args.test == True:
         Tournament2.test(red="my_agent.py", blue="domination/agent.py")
     else:
         now = datetime.datetime.now()
         folder = os.path.join('tournaments', now.strftime("%Y%m%d-%H%M"))
         Tournament2.tournament(agents=sys.argv[1:], output_folder=folder, rendered=False)
-# This is what is used to run the tournament:

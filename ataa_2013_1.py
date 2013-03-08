@@ -26,7 +26,7 @@ w w w w w w w w w w w w w w w w w w w w w w w w w w w w w
 """
 
 class Tournament1(scenarios.Scenario):
-    REPEATS   = 1000
+    REPEATS   = 200
     GENERATOR = None
     FIELD     = core.Field.from_string(FIELD)
     SETTINGS  = core.Settings(max_steps=300,
