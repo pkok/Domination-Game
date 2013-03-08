@@ -172,13 +172,13 @@ class Agent(object):
             if safe_cps:
                 cp_distance = {}
                 nearby_agent_id = {}
-                paths = dict()
+                paths = {}
                 for cp in safe_cps:
                     cp = cp[:2]
                     paths[cp] = dict()
                     cp_distance[cp] = float("inf")
+                    # is in joint_observation, recode!
                     for agent_id, agent in self.joint_observation.friends.items():
-                        print cp
                         paths[cp][agent_id] = find_single_path(agent[:2], agent[2], cp[:2], self.mesh, self.grid,
                                 self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
                     for agent_id, agent_path in paths[cp].items():
