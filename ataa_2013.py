@@ -86,6 +86,9 @@ if __name__ == '__main__':
     # Use the -t flag to run a single rendered game. Otherwise run full tournament.
     parser = argparse.ArgumentParser(description='Process test flag.')
     parser.add_argument('-t', '--test', action='store_true')
+    parser.add_argument('-r', '--rendered', action='store_true')
+    parser.add_argument('-red', type=str, default='my_agent.py')
+    parser.add_argument('-blue', type=str, default='domination/agent.py')
     args = parser.parse_args(sys.argv[1:])
 
     if args.test == True:
@@ -93,4 +96,4 @@ if __name__ == '__main__':
     else:
         now = datetime.datetime.now()
         folder = os.path.join('tournaments', now.strftime("%Y%m%d-%H%M"))
-        Tournament2.tournament(agents=sys.argv[1:], output_folder=folder, rendered=False)
+        Tournament2.tournament(agents=[args.red, args.blue], output_folder=folder, rendered=args.rendered)
