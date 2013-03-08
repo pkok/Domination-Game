@@ -156,6 +156,63 @@ class Agent(object):
         
         team = int(self.team == TEAM_BLUE)
         controlling_cps = map(lambda cp: cp[2] == team, self.obs.cps)
+
+        if all(controlling_cps):
+            danger_zone = min([self.settings.max_range,
+                self.settings.max_speed])
+            def cp_under_pressure(cp):
+                for foe in self.joint_observation.foes[self.joint_observation.step]:
+                    dx = foe[0] - cp[0]
+                    dy = foe[1] - cp[1]
+                    distance = (dx**2 + dy**2) ** 0.5
+                    if distance < danger_zone:
+                        return True
+                return False
+            safe_cps = filter(lambda x: not cp_under_pressure(x), self.obs.cps)
+            if safe_cps:
+                cp_distance = {}
+                nearby_agent_id = {}
+                paths = {}
+                for cp in safe_cps:
+                    cp = cp[:2]
+                    paths[cp] = dict()
+                    cp_distance[cp] = float("inf")
+                    # is in joint_observation, recode!
+                    for agent_id, agent in self.joint_observation.friends.items():
+                        paths[cp][agent_id] = find_single_path(agent[:2], agent[2], cp[:2], self.mesh, self.grid,
+                                self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
+                    for agent_id, agent_path in paths[cp].items():
+                        if len(agent_path) < cp_distance[cp]:
+                            cp_distance[cp] = len(agent_path)
+                            nearby_agent_id[cp] = agent_id
+                random.shuffle(safe_cps)
+                chosen_cp = min(safe_cps, key=lambda cp:
+                        self.joint_observation.friends[nearby_agent_id[cp[:2]]].ammo)
+                chosen_agent_id = nearby_agent_id[cp]
+                chosen_agent = self.joint_observation.friends[chosen_agent_id]
+                dx = Agent.INTEREST_POINTS['am1'][0] - chosen_agent[0]
+                dy = Agent.INTEREST_POINTS['am1'][1] - chosen_agent[1]
+                distance_am1 = (dx**2 + dy**2) ** 0.5
+                dx = Agent.INTEREST_POINTS['am2'][0] - chosen_agent[0]
+                dy = Agent.INTEREST_POINTS['am2'][1] - chosen_agent[1]
+                distance_am2 = (dx**2 + dy**2) ** 0.5
+                if distance_am1 < distance_am2: 
+                    chosen_am = Agent.INTEREST_POINTS['am1']
+                else:
+                    chosen_am = Agent.INTEREST_POINTS['am2']
+                # Agents not "associated" with a CP
+                selectable_agents = filter(lambda friend: 
+                        friend not in nearby_agent_id.values(), 
+                        self.joint_observation.friends)
+                if len(selectable_agents) >= 1:
+                    # Select the nearest to the CP
+                    # Move this one to the CP
+                    # Move chosen_agent to the chosen_am
+                    #return after setting the goals, with commands such as...
+                    #     self.joint_observation.goals = goals
+                    #     self.goal = goals[self.id]
+                    pass
+
         #If no agent has ammo, follow this policy
         if len(have_ammo) == 0:
             
