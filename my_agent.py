@@ -155,7 +155,6 @@ class Agent(object):
             am2_dist.append(self.joint_observation.paths[id]['am2'][1] + respawn_time)
         
         team = int(self.team == TEAM_BLUE)
-        """
         controlling_cps = map(lambda cp: cp[2] == team, self.obs.cps)
 
         if all(controlling_cps):
@@ -188,9 +187,9 @@ class Agent(object):
                             nearby_agent_id[cp] = agent_id
                 random.shuffle(safe_cps)
                 chosen_cp = min(safe_cps, key=lambda cp:
-                        self.joint_observation.friends[nearby_agent_id[cp]].ammo)
+                        self.joint_observation.friends[nearby_agent_id[cp[:2]]].ammo)
                 chosen_agent_id = nearby_agent_id[cp]
-                chosen_agent = self.joint.observation.friends[chosen_agent_id]
+                chosen_agent = self.joint_observation.friends[chosen_agent_id]
                 dx = Agent.INTEREST_POINTS['am1'][0] - chosen_agent[0]
                 dy = Agent.INTEREST_POINTS['am1'][1] - chosen_agent[1]
                 distance_am1 = (dx**2 + dy**2) ** 0.5
@@ -201,22 +200,18 @@ class Agent(object):
                     chosen_am = Agent.INTEREST_POINTS['am1']
                 else:
                     chosen_am = Agent.INTEREST_POINTS['am2']
+                # Agents not "associated" with a CP
                 selectable_agents = filter(lambda friend: 
                         friend not in nearby_agent_id.values(), 
                         self.joint_observation.friends)
-                if len(selectable_agents) == 1:
+                if len(selectable_agents) >= 1:
+                    # Select the nearest to the CP
+                    # Move this one to the CP
+                    # Move chosen_agent to the chosen_am
+                    #return after setting the goals, with commands such as...
+                    #     self.joint_observation.goals = goals
+                    #     self.goal = goals[self.id]
                     pass
-                self.joint_observation.goals = goals
-                self.goal = goals[self.id]
-                return
-                # select nearby agent, NA
-                # select nearby ammo point, AP
-                # NA go to AP
-                # if NA == 0, set goal
-                # Set the joint goal
-                #self.joint_observation.goals = goals
-                # return
-        """
 
         #If no agent has ammo, follow this policy
         if len(have_ammo) == 0:
