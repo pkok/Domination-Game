@@ -5,6 +5,8 @@ import math
 import os
 import datetime
 import argparse
+import cPickle as pickle
+from shutil import copyfile
 from domination import core, scenarios
 
 FIELD1 = """
@@ -84,16 +86,28 @@ class Tournament2(scenarios.Scenario):
 if __name__ == '__main__':
 
     # Use the -t flag to run a single rendered game. Otherwise run full tournament.
+    now = datetime.datetime.now()
     parser = argparse.ArgumentParser(description='Process test flag.')
+    parser.add_argument('-red', '--red_agent', type=str, default='my_agent.py')
+    parser.add_argument('-blue', '--blue_agent', type=str, default='domination/agent.py')
+    parser.add_argument('-s', '--save_blob', type=str, default = '')
+    parser.add_argument('-n', '--new_blob', action='store_true')
     parser.add_argument('-t', '--test', action='store_true')
-    parser.add_argument('-r', '--rendered', action='store_true')
-    parser.add_argument('-red', type=str, default='my_agent.py')
-    parser.add_argument('-blue', type=str, default='domination/agent.py')
+    parser.add_argument('-v', '--visuals', action='store_true')
+    parser.add_argument('-r', '--repeats', type=int, default=100)  ## Hoe dit doorgeven aan class Tournament2??
     args = parser.parse_args(sys.argv[1:])
+
+    if args.save_blob != '':
+        copyfile('my_agent_blob', 'my_agent_blob_' + args.save_blob)
+
+    if args.new_blob == True:
+        state_action_pairs = {}
+        blobfile = open("my_agent_blob", 'wb')
+        pickle.dump(state_action_pairs, blobfile, pickle.HIGHEST_PROTOCOL)
 
     if args.test == True:
         Tournament2.test(red="my_agent.py", blue="domination/agent.py")
     else:
         now = datetime.datetime.now()
         folder = os.path.join('tournaments', now.strftime("%Y%m%d-%H%M"))
-        Tournament2.tournament(agents=[args.red, args.blue], output_folder=folder, rendered=args.rendered)
+        Tournament2.tournament(agents=[args.red_agent, args.blue_agent], output_folder=folder, rendered=args.visuals)
