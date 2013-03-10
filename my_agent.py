@@ -76,8 +76,8 @@ class Agent(object):
             return a tuple in the form: (turn, speed, shoot)
         """ 
         # Compute the goal
-        # self.set_goal_sarsa()
-        self.set_goal_hardcoded()
+        self.set_goal_sarsa()
+        # self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -592,7 +592,6 @@ class Agent(object):
     def defend(self):
         """ Returns the turn an agent should to to defend a point on the map
         """
-        print "%s is defending" % self.id
         # Determine new angle the agent should be at
         new_angle = 0.0
         
@@ -1010,10 +1009,12 @@ class JointObservation(object):
 
         self.new_state_key = -1
         self.old_state_key = -1
-
+        self.locked_agent = [False] * self.number_of_agents
         self.new_joint_action = -1
         self.old_joint_action = -1
         self.reward = 0
+
+        # TODO: use interest points instead of regions
 
         # All regions
         self.regions = [((0,0),     (125,95)),
@@ -1045,7 +1046,7 @@ class JointObservation(object):
             self.coordlist.reverse()
 
         self.coords = {2: self.coordlist[0], 6: self.coordlist[1], 8: self.coordlist[2], 12: self.coordlist[3]}
-
+        
         # Possible compass directions for the agents
         self.directions = ["N", "E", "S", "W"]
         # self.directions = ["N", "NE" "E", "SE", "S", "SW", "W", "NW"]
@@ -1091,6 +1092,7 @@ class JointObservation(object):
         # Keep track of the agents who have passed their observation in this timestep
         self.called_agents = set()
 
+        # TODO: joint actions should be interest points, not regions.
         # Create a list of all possible joint actions
         interestRegions = self.ROI["cp"] + self.ROI["am"]
         self.joint_actions = list(product(interestRegions, repeat=self.number_of_agents))
@@ -1115,6 +1117,28 @@ class JointObservation(object):
             self.chosen_goals = {}
             self.paths = {}
 
+        # check if the agent has reached it's goal or died
+        # if so then reset the lock on that agent
+        if (not self.old_joint_action == -1):
+            passed_hor = False
+            passed_ver = False
+            objective = self.coords[self.old_joint_action[agent_id]]
+            #case 1: bot is left of objective, and is to the right afterwards or equal to the position
+            if (self.friends[agent_id].x <= objective[0] +3 and objective[0] -3 <= observation.loc[0]):
+                passed_hor = True
+            #case 2: vice versa
+            elif(self.friends[agent_id].x >= objective[0] -3 and objective[0] +3 >= observation.loc[0]):
+                passed_hor = True
+            #case 3: bot is to the top of objective, and is to the bottom or equal afterwards
+            if (self.friends[agent_id].y <= objective[1] +3 and objective[1] -3 <= observation.loc[1]):
+                passed_ver = True
+            #case 4: vice versa
+            elif (self.friends[agent_id].y >= objective[1] -3 and objective[1] +3 >= observation.loc[1]):
+                passed_ver = True
+            if (passed_ver and passed_hor) or observation.respawn_in > 0:
+                print "Agent " + str(agent_id) + " unlocked."
+                self.locked_agent[agent_id] = False
+            
         self.friends[agent_id] = AgentData(observation.loc[0], observation.loc[1],
                 observation.angle, observation.ammo, observation.collided,
                 observation.respawn_in, observation.hit)
@@ -1147,8 +1171,10 @@ class JointObservation(object):
         self.respawn_in[agent_id] = observation.respawn_in
         self.hit[agent_id] = observation.hit
 
+        
+        
         self.called_agents.add(agent_id)
-        if len(self.called_agents) == len(self.friends):
+        if len(self.called_agents) == self.number_of_agents:
             self.state = self.process_joint_observation() # Process the joint observation
             self.new_state_key = self.state.toKey()
             self.chooseJointAction()
@@ -1160,6 +1186,8 @@ class JointObservation(object):
         self.paths[agent_id] = find_all_paths(observation.loc, observation.angle, self.interest_points, 
                                 self.mesh, self.grid, self.settings.max_speed, self.settings.max_turn,
                                 self.settings.tilesize)
+                                
+        
         
 
     def update_action(self, agent_id, action_tuple):
@@ -1205,17 +1233,41 @@ class JointObservation(object):
         #         action_value_dict[action] = self.initial_value
         # print "action_value_dict: "+ str(action_value_dict)
         
+        # brute force acquisition of available actions
+        available_joint_actions = []
+        # if every agent is available, make every action available
+        if self.locked_agent == [False] * self.number_of_agents:
+            available_joint_actions = list(self.joint_actions);
+        else:
+            # if not, then see which agents are locked, and only add actions that correspond to the old action
+            for action in self.joint_actions:
+                add_action = True
+                for agent_id in sorted(self.friends):
+                    if not self.old_joint_action == -1:
+                        if self.locked_agent[agent_id] and action[agent_id] != self.old_joint_action[agent_id]:
+                            add_action = False
+                            break
+                if add_action:
+                    available_joint_actions.append(action)
+        
+        
+        
         if randint(1,100) * 0.01 >= self.epsilon:
-            joint_action = random.choice(self.joint_actions)
+            joint_action = random.choice(available_joint_actions)
         else:
             max_val = -1000
             joint_action = -1
-            for action in self.joint_actions:
+            for action in available_joint_actions:
                 value = action_value_dict[action]
                 if value > max_val:
                     max_val = value
                     joint_action = action
         self.new_joint_action = joint_action
+        if self.old_joint_action == -1:
+            self.old_joint_action = joint_action
+        print str(joint_action) + " selected as joint action."
+        # once a joint action is picked, all agents should be locked.
+        self.locked_agent = [True] * self.number_of_agents
 
     
     def setReward(self):
