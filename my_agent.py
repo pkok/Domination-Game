@@ -76,8 +76,8 @@ class Agent(object):
             return a tuple in the form: (turn, speed, shoot)
         """ 
         # Compute the goal
-        self.set_goal_sarsa()
-        # self.set_goal_hardcoded()
+        # self.set_goal_sarsa()
+        self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -100,6 +100,8 @@ class Agent(object):
         """This function sets the goal for the agent.
         """
 
+        jo = self.joint_observation
+
         # If the agent is not agent 0, its goal has already been computed
         if self.id != 0:
             self.goal = self.joint_observation.goals[self.id]
@@ -108,7 +110,13 @@ class Agent(object):
         # Intinialise some handy variables
         goals = [(0,0), (0,0), (0.0)]
         assigned = []       
-        have_ammo = []
+        ammo_chart = {}
+        for agent_id, agent in self.joint_observation.friends.items():
+            if agent[3] not in ammo_chart:
+                ammo_chart[agent[3]] = [agent_id]
+            else:
+                ammo_chart[agent[3]].append(agent_id)
+        have_ammo = [] #join ammo_chart[key] for key > 1
         for agent_id, agent in self.joint_observation.friends.items():
             if agent[3] > 1:
                 have_ammo.append(agent_id)
@@ -157,6 +165,7 @@ class Agent(object):
         team = int(self.team == TEAM_BLUE)
         controlling_cps = map(lambda cp: cp[2] == team, self.obs.cps)
 
+        """
         if all(controlling_cps):
             danger_zone = min([self.settings.max_range,
                 self.settings.max_speed])
@@ -212,6 +221,7 @@ class Agent(object):
                     #     self.joint_observation.goals = goals
                     #     self.goal = goals[self.id]
                     pass
+        """
 
         #If no agent has ammo, follow this policy
         if len(have_ammo) == 0:
@@ -426,7 +436,9 @@ class Agent(object):
     def allow_reverse_gear(self, path, forward_angle, reverse_angle):
         """ Is it safe/smart to drive backwards?
         """
-        return abs(reverse_angle) < abs(forward_angle)
+        angle_threshold = 0
+        #angle_threshold = 1 * math.pi / 180
+        return abs(reverse_angle) < (abs(forward_angle) + angle_threshold)
     
     def compute_shoot(self, path_angle):
         """This function returns shoot and turn actions for the agent
