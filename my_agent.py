@@ -12,7 +12,7 @@ astar = astar.astar
 
 class Agent(object):
 
-    NAME = "Dalek Sec"
+    NAME = "Dalek Thay"
     RADIUS = 6.0 # Radius in pixels of an agent.
     INTEREST_POINTS = {'cp1':(232, 56), 'cp2':(264, 216), 'am1':(184,168), 'am2':(312,104)}
     
@@ -1160,7 +1160,7 @@ class JointObservation(object):
             if wall in observation.walls:
                 self.walls[wall].add(agent_id)
             else:
-                self.walls[wall] -= {agent_id}
+                self.walls[wall].remove(agent_id)
         self.diff_score = (observation.score[0] - self.score[0],
                            observation.score[1] - self.score[1])
         self.ammo[agent_id] = observation.ammo
