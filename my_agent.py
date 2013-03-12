@@ -1079,7 +1079,7 @@ class JointObservation(object):
             if wall in observation.walls:
                 self.walls[wall].add(agent_id)
             else:
-                self.walls[wall] -= {agent_id}
+                self.walls[wall].remove(agent_id)
         self.diff_score = (observation.score[0] - self.score[0],
                            observation.score[1] - self.score[1])
         self.ammo[agent_id] = observation.ammo
