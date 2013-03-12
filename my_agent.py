@@ -30,10 +30,15 @@ class Agent(object):
         self.epsilon = 0.05
         self.gamma = 0.9
         self.alpha = 0.1
+        # WoLF
+        self.deltaWin = 0.4
+        self.deltaLose = self.deltaWin * 2
+        self.useWoLF = True
+        # /WoLF
         self.initial_value = 10
         self.number_of_agents = 3
         # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
-        self.joint_observation = JointObservation(settings, field_grid, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value, self.number_of_agents, Agent.INTEREST_POINTS)
+        self.joint_observation = JointObservation(settings, field_grid, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.deltaWin, self.deltaLose, self.initial_value, self.number_of_agents, Agent.INTEREST_POINTS)
         # self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
@@ -989,7 +994,7 @@ class JointObservation(object):
                                  ZZZZZZZZZZZZZ
 """
 
-    def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents, interest_pts):
+    def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, deltaWin, deltaLose, initial_value, number_of_agents, interest_pts):
         if team == TEAM_BLUE:
             print JointObservation.ascii_blue
         else:
@@ -1002,6 +1007,8 @@ class JointObservation(object):
         self.epsilon = epsilon
         self.gamma = gamma
         self.alpha = alpha
+        self.deltaWin = deltaWin
+        self.deltaLose = deltaLose
         self.initial_value = initial_value
         self.number_of_agents = number_of_agents
 
