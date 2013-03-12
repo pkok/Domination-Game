@@ -12,7 +12,7 @@ astar = astar.astar
 
 class Agent(object):
 
-    NAME = "Dalek Sec"
+    NAME = "Dalek Thay"
     RADIUS = 6.0 # Radius in pixels of an agent.
     INTEREST_POINTS = {'cp1':(232, 56), 'cp2':(264, 216), 'am1':(184,168), 'am2':(312,104)}
     
@@ -29,9 +29,14 @@ class Agent(object):
         self.epsilon = 0.05
         self.gamma = 0.9
         self.alpha = 0.1
+        # WoLF
+        self.deltaWin = 0.4
+        self.deltaLose = self.deltaWin * 2
+        self.useWoLF = True
+        # /WoLF
         self.initial_value = 10
         self.number_of_agents = 3
-        self.joint_observation = JointObservation(settings, field_grid, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value, self.number_of_agents, Agent.INTEREST_POINTS)
+        self.joint_observation = JointObservation(settings, field_grid, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.deltaWin, self.useWoLF, self.deltaLose, self.initial_value, self.number_of_agents, Agent.INTEREST_POINTS)
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
         self.goal = None
@@ -986,7 +991,7 @@ class JointObservation(object):
                                  ZZZZZZZZZZZZZ
 """
 
-    def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents, interest_pts):
+    def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, deltaWin, deltaLose, useWoLF, initial_value, number_of_agents, interest_pts):
         if team == TEAM_BLUE:
             print JointObservation.ascii_blue
         else:
@@ -999,6 +1004,9 @@ class JointObservation(object):
         self.epsilon = epsilon
         self.gamma = gamma
         self.alpha = alpha
+        self.deltaWin = deltaWin
+        self.deltaLose = deltaLose
+        self.useWoLF = useWoLF
         self.initial_value = initial_value
         self.number_of_agents = number_of_agents
 
@@ -1155,7 +1163,10 @@ class JointObservation(object):
             if wall in observation.walls:
                 self.walls[wall].add(agent_id)
             else:
-                self.walls[wall] -= {agent_id}
+                try:
+                    self.walls[wall].remove(agent_id)
+                except KeyError:
+                    pass
         self.diff_score = (observation.score[0] - self.score[0],
                            observation.score[1] - self.score[1])
         self.ammo[agent_id] = observation.ammo
