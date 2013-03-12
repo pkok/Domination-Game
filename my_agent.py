@@ -23,18 +23,15 @@ class Agent(object):
             given for each game.
         """
         
-        self.id = NamedInt(id)
+        self.id = id #NamedInt(id)
         self.team = team
         self.settings = settings
-        # self.state_action_pairs = defaultdict(lambda: [None, 10])
         self.epsilon = 0.05
         self.gamma = 0.9
         self.alpha = 0.1
         self.initial_value = 10
         self.number_of_agents = 3
-        # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
         self.joint_observation = JointObservation(settings, field_grid, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value, self.number_of_agents, Agent.INTEREST_POINTS)
-        # self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
         self.goal = None
@@ -1119,23 +1116,21 @@ class JointObservation(object):
 
         # check if the agent has reached it's goal or died
         # if so then reset the lock on that agent
+        #     #case 1: bot is left of objective, and is to the right afterwards or equal to the position
+        #     if (self.friends[agent_id].x <= objective[0] +6 and objective[0] -6 <= observation.loc[0]):
+        #         passed_hor = True
+        #     #case 2: vice versa
+        #     elif(self.friends[agent_id].x >= objective[0] -6 and objective[0] +6 >= observation.loc[0]):
+        #         passed_hor = True
+        #     #case 3: bot is to the top of objective, and is to the bottom or equal afterwards
+        #     if (self.friends[agent_id].y <= objective[1] +6 and objective[1] -6 <= observation.loc[1]):
+        #         passed_ver = True
+        #     #case 4: vice versa
+        #     elif (self.friends[agent_id].y >= objective[1] -6 and objective[1] +6 >= observation.loc[1]):
+        #         passed_ver = True
         if (not self.old_joint_action == -1):
-            passed_hor = False
-            passed_ver = False
             objective = self.coords[self.old_joint_action[agent_id]]
-            #case 1: bot is left of objective, and is to the right afterwards or equal to the position
-            if (self.friends[agent_id].x <= objective[0] +3 and objective[0] -3 <= observation.loc[0]):
-                passed_hor = True
-            #case 2: vice versa
-            elif(self.friends[agent_id].x >= objective[0] -3 and objective[0] +3 >= observation.loc[0]):
-                passed_hor = True
-            #case 3: bot is to the top of objective, and is to the bottom or equal afterwards
-            if (self.friends[agent_id].y <= objective[1] +3 and objective[1] -3 <= observation.loc[1]):
-                passed_ver = True
-            #case 4: vice versa
-            elif (self.friends[agent_id].y >= objective[1] -3 and objective[1] +3 >= observation.loc[1]):
-                passed_ver = True
-            if (passed_ver and passed_hor) or observation.respawn_in > 0:
+            if (point_dist(objective, observation.loc) < self.settings.tilesize) or observation.respawn_in > 0:
                 print "Agent " + str(agent_id) + " unlocked."
                 self.locked_agent[agent_id] = False
             
@@ -1230,6 +1225,9 @@ class JointObservation(object):
         #         action_value_dict[action] = self.initial_value
         # print "action_value_dict: "+ str(action_value_dict)
         
+        # Update old_joint_action
+        self.old_joint_action = self.new_joint_action
+
         # brute force acquisition of available actions
         available_joint_actions = []
         # if every agent is available, make every action available
@@ -1246,7 +1244,9 @@ class JointObservation(object):
                             break
                 if add_action:
                     available_joint_actions.append(action)
-        
+
+        print "old_joint_action: " + str(self.old_joint_action)
+        print "\n\nAvailable joint actions: \n" + str(available_joint_actions)
         
         
         if randint(1,100) * 0.01 >= self.epsilon:
@@ -1262,7 +1262,7 @@ class JointObservation(object):
         self.new_joint_action = joint_action
         if self.old_joint_action == -1:
             self.old_joint_action = joint_action
-        print str(joint_action) + " selected as joint action."
+        print str(joint_action) + " selected as joint action." + "\n----------------------------------"
         # once a joint action is picked, all agents should be locked.
         self.locked_agent = [True] * self.number_of_agents
 
