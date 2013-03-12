@@ -1078,7 +1078,7 @@ class JointObservation(object):
         for wall in set(self.walls.keys() + walls_as_tuples):
             if wall in observation.walls:
                 self.walls[wall].add(agent_id)
-            else:
+            else if agent_id in self.walls[wall]:
                 self.walls[wall].remove(agent_id)
         self.diff_score = (observation.score[0] - self.score[0],
                            observation.score[1] - self.score[1])
