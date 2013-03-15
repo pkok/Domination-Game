@@ -146,8 +146,8 @@ class Agent(object):
 
         for id in range(3):
             # Add respawn timer to distance calculation
-            if self.joint_observation.respawn_in[id] > 0:
-                respawn_time = self.joint_observation.respawn_in[id]
+            if self.joint_observation.friends[id].respawn_in > 0:
+                respawn_time = self.joint_observation.friends[id].respawn_in
             else:
                 respawn_time = 0
             # Calculate distances
@@ -990,17 +990,25 @@ class JointObservation(object):
                                Z ,ZZZZZZZZZZZZ Z
                                  ZZZZZZZZZZZZZ
 """
-
+    
     def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, deltaWin, deltaLose, useWoLF, initial_value, number_of_agents, interest_pts):
+        # printing out the proper transformer logo
         if team == TEAM_BLUE:
             print JointObservation.ascii_blue
         else:
             print JointObservation.ascii_red
+        
+        # Game constants
         self.interest_points = interest_pts
         self.team = team        
         self.grid = grid
         self.mesh = transform_mesh(nav_mesh, interest_pts, grid, settings.tilesize, settings.max_speed, settings.max_turn)
+        self.number_of_agents = number_of_agents
+        
+        # State space value representation
         self.state_action_pairs = {}
+        
+        # Learning constants
         self.epsilon = epsilon
         self.gamma = gamma
         self.alpha = alpha
@@ -1008,10 +1016,9 @@ class JointObservation(object):
         self.deltaLose = deltaLose
         self.useWoLF = useWoLF
         self.initial_value = initial_value
-        self.number_of_agents = number_of_agents
-
+        
+        # Learning variables
         self.state = -1
-
         self.new_state_key = -1
         self.old_state_key = -1
         self.locked_agent = [False] * self.number_of_agents
@@ -1019,45 +1026,17 @@ class JointObservation(object):
         self.old_joint_action = -1
         self.reward = 0
 
-        # TODO: use interest points instead of regions
-
-        # All regions
-        self.regions = [((0,0),     (125,95)),
-                        ((126,0),   (180,95)),
-                        ((181,0),   (350,95)),
-                        ((351,0),   (460,95)),
-                        ((0,96),    (55,175)),
-                        ((56,96),   (125,175)),
-                        ((126,96),  (180,175)),
-                        ((181,96),  (285,175)),
-                        ((286,96),  (350,175)),
-                        ((351,96),  (410,175)),
-                        ((411,96),  (460,175)),
-                        ((0,176),   (125,265)),
-                        ((126,176), (285,265)),
-                        ((286,176), (350,265)),
-                        ((351,176), (460,265))
-                       ]
-
-        # Regions of interest
-        self.ROI = {"cp": (2, 12), "am": (6,8), "rest": (0,1,3,4,5,9,10,11,13,14)}
+        # Regions of interest; placeholders for the cp and ammo points in the current learning setting
+        self.ROI = {"cp": (2, 12), "am": (6,8)}
  
         # coordinate list [2, 6, 8, 12]
         self.coordlist = [(232, 56), (184, 168), (312, 104), (264, 216)]
         
         # Switch the regions around when we start on the other side of the screen
         if self.team == TEAM_BLUE:
-            self.regions.reverse()
             self.coordlist.reverse()
 
         self.coords = {2: self.coordlist[0], 6: self.coordlist[1], 8: self.coordlist[2], 12: self.coordlist[3]}
-        
-        # Possible compass directions for the agents
-        self.directions = ["N", "E", "S", "W"]
-        # self.directions = ["N", "NE" "E", "SE", "S", "SW", "W", "NW"]
-
-        # Death timer ranges (binned)
-        self.death_timer_ranges = ("0", "1-3", "4-6", "7-10") #(0,3,6,10,15)
 
         # The game settings (not needed right now)
         self.settings = settings
@@ -1084,20 +1063,9 @@ class JointObservation(object):
         self.score = (0, 0)
         self.diff_score = (0, 0)
 
-        # Amount of ammo carried per agent
-        self.ammo = {} # agent_id: ammo
-        # If the agent bumped into something during the last timestep
-        self.collided = {} # agent_id: collided
-        # How many time steps to go before an agent respawns, or -1 if already
-        # active.
-        self.respawn_in = {} # agent_id: respawn_in
-        # What did the agent hit by shooting? None also indicates no shooting
-        self.hit = {} # agent_id: None/TEAM_RED/TEAM_BLUE
-
         # Keep track of the agents who have passed their observation in this timestep
         self.called_agents = set()
 
-        # TODO: joint actions should be interest points, not regions.
         # Create a list of all possible joint actions
         interestRegions = self.ROI["cp"] + self.ROI["am"]
         self.joint_actions = list(product(interestRegions, repeat=self.number_of_agents))
@@ -1113,6 +1081,8 @@ class JointObservation(object):
         """ Update the joint observation with a single agent's observation
             information.
         """
+        
+        # Initialize to empty when the first agent calls update
         if self.step != observation.step:
             self.step = observation.step
             # Empty collections as neccesary 
@@ -1122,32 +1092,26 @@ class JointObservation(object):
             self.chosen_goals = {}
             self.paths = {}
 
-        # check if the agent has reached it's goal or died
-        # if so then reset the lock on that agent
-        #     #case 1: bot is left of objective, and is to the right afterwards or equal to the position
-        #     if (self.friends[agent_id].x <= objective[0] +6 and objective[0] -6 <= observation.loc[0]):
-        #         passed_hor = True
-        #     #case 2: vice versa
-        #     elif(self.friends[agent_id].x >= objective[0] -6 and objective[0] +6 >= observation.loc[0]):
-        #         passed_hor = True
-        #     #case 3: bot is to the top of objective, and is to the bottom or equal afterwards
-        #     if (self.friends[agent_id].y <= objective[1] +6 and objective[1] -6 <= observation.loc[1]):
-        #         passed_ver = True
-        #     #case 4: vice versa
-        #     elif (self.friends[agent_id].y >= objective[1] -6 and objective[1] +6 >= observation.loc[1]):
-        #         passed_ver = True
+        # Unlocks an agent's action if it has reached it's objective or if it is respawning
         if (not self.old_joint_action == -1):
             objective = self.coords[self.old_joint_action[agent_id]]
             if (point_dist(objective, observation.loc) < self.settings.tilesize) or observation.respawn_in > 0:
                 print "Agent " + str(agent_id) + " unlocked."
                 self.locked_agent[agent_id] = False
-            
+        
+        # Fill friends with current agent data
         self.friends[agent_id] = AgentData(observation.loc[0], observation.loc[1],
                 observation.angle, observation.ammo, observation.collided,
                 observation.respawn_in, observation.hit)
+        
+        # add foes to the joint observation
         for foe in observation.foes:
             self.foes[self.step].add(foe)
+            
+        # copy over the control point observations
         self.cp = observation.cps
+        
+        # if object is in vision range, then add it to the object list
         for obj in set(self.objects.keys() + observation.objects):
             distance = ((obj[0] - observation.loc[0]) ** 2 +
                        (obj[1] - observation.loc[1]) ** 2) ** 0.5
@@ -1158,6 +1122,8 @@ class JointObservation(object):
                 # object is not already reported missing
                 elif self.objects[obj][1] < self.objects[obj][0]:
                     self.objects[obj][1] = self.step
+        
+        # add walls to the joint observation
         walls_as_tuples = [tuple(w) for w in observation.walls]
         for wall in set(self.walls.keys() + walls_as_tuples):
             if wall in observation.walls:
@@ -1167,25 +1133,23 @@ class JointObservation(object):
                     self.walls[wall].remove(agent_id)
                 except KeyError:
                     pass
+        # the difference in score for both teams between the current and last time step
         self.diff_score = (observation.score[0] - self.score[0],
                            observation.score[1] - self.score[1])
-        self.ammo[agent_id] = observation.ammo
-        self.collided[agent_id] = observation.collided
-        self.respawn_in[agent_id] = observation.respawn_in
-        self.hit[agent_id] = observation.hit
 
-        
-        
+        # checks if all agents have been called
         self.called_agents.add(agent_id)
         if len(self.called_agents) == self.number_of_agents:
+            # once all agents have been called, the joint observation can be processed into a state
             self.state = self.process_joint_observation() # Process the joint observation
-            self.new_state_key = self.state.toKey()
-            self.chooseJointAction()
-            self.setReward()
+            self.new_state_key = self.state.toKey() # key used to lookup in the state action dict
+            self.chooseJointAction() # choose a new joint action
+            self.setReward() # determine the reward for the current state
 
             if self.old_state_key != -1:
                 self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
         
+        # find all paths for the current agent to every interest point
         self.paths[agent_id] = find_all_paths(observation.loc, observation.angle, self.interest_points, 
                                 self.mesh, self.grid, self.settings.max_speed, self.settings.max_turn,
                                 self.settings.tilesize)
@@ -1219,22 +1183,18 @@ class JointObservation(object):
 
 
     def chooseJointAction(self):
-        # if self.state_action_pairs[self.new_state_key] == {}:
-        #      for action in self.joint_action:
-        #          self.state_action_pairs[self.new_state_key][action] = self.initial_value
-
+        """ Used with wolf and Sarsa.
+            Choose the next joint action out of the available actions.        
+        """
+        # If the state key is not recognized in the state action pairs
+        # then the value of that key is set to the initial value.
         try:
             action_value_dict = self.state_action_pairs[self.new_state_key]
         except KeyError:
             self.state_action_pairs[self.new_state_key] = {}
             for action in self.joint_actions:
                 self.state_action_pairs[self.new_state_key][action] = self.initial_value
-                action_value_dict = self.state_action_pairs[self.new_state_key]
-        # # Initialize all state-action pairs with the initial value if this state is encoutered for the first time.
-        # if action_value_dict == {}:
-        #     for action in self.joint_actions:
-        #         action_value_dict[action] = self.initial_value
-        # print "action_value_dict: "+ str(action_value_dict)
+                action_value_dict = self.state_action_pairs[self.new_state_key])
         
         # Update old_joint_action
         self.old_joint_action = self.new_joint_action
@@ -1255,14 +1215,13 @@ class JointObservation(object):
                             break
                 if add_action:
                     available_joint_actions.append(action)
-
-        print "old_joint_action: " + str(self.old_joint_action)
-        print "\n\nAvailable joint actions: \n" + str(available_joint_actions)
-        
-        
+                    
+        # Epsilon greedy algorithm
         if randint(1,100) * 0.01 >= self.epsilon:
+            # Epsilon random action
             joint_action = random.choice(available_joint_actions)
         else:
+            # Greedy action
             max_val = -1000
             joint_action = -1
             for action in available_joint_actions:
@@ -1270,15 +1229,17 @@ class JointObservation(object):
                 if value > max_val:
                     max_val = value
                     joint_action = action
+        # update old values
         self.new_joint_action = joint_action
         if self.old_joint_action == -1:
             self.old_joint_action = joint_action
-        print str(joint_action) + " selected as joint action." + "\n----------------------------------"
-        # once a joint action is picked, all agents should be locked.
+        # once a joint action is picked, all agent's actions should be locked.
         self.locked_agent = [True] * self.number_of_agents
 
     
     def setReward(self):
+        """ Set the reward for the current state
+        """
         difference = self.diff_score[0] if self.team == TEAM_RED else self.diff_score[1]
         
         if difference > 0:
@@ -1286,9 +1247,9 @@ class JointObservation(object):
         else:
             reward = 0
             for agent_id, agentRegion in zip(sorted(self.friends), sorted(self.state.locations.values())):
-                if self.ammo[agent_id] > 0 and (agentRegion == 2 or agentRegion == 12):
+                if self.friends[agent_id].ammo > 0 and (agentRegion == 2 or agentRegion == 12):
                     reward += 1
-                if self.ammo[agent_id] == 0 and (agentRegion == 2 or agentRegion == 12):
+                if self.friends[agent_id].ammo == 0 and (agentRegion == 2 or agentRegion == 12):
                     reward -= 1
 
         self.reward = reward
@@ -1313,37 +1274,8 @@ class JointObservation(object):
     def process_joint_observation(self):
         """ Creates an abstract representation of the observation, on which we will learn.
         """
+        # Initialize as empty state
         state = State()
-        
-        def in_region(self, x, y):
-            for idx, r in enumerate(self.regions):
-                if x <= r[1][0] and y <= r[1][1]:
-                    return idx
-         
-        def angle_to_wd(angle):
-            if angle <= 45:
-                return "N"
-            elif angle <= 135:
-                return "E"
-            elif angle <= 225:
-                return "S"
-            elif angle <= 315:
-                return "W"
-            else:
-                return "N"
-                
-        def timer_range(value):
-            if value <= 0:
-                return 0
-            elif value <= 3:
-                return 1
-            elif value <= 6:
-                return 2
-            elif value <= 10:
-                return 3
-            elif value <= 15:
-                return 4
-
 
         # Create the location based on the path distances to all interest points.
         for id, agent_paths in self.paths.iteritems():
@@ -1377,8 +1309,6 @@ class JointObservation(object):
 
         # grabs the information from self.friends that is relevant to the state space
         for key, val in self.friends.iteritems():
-            #state.locations[key]    = in_region(self, val.x, val.y)
-            #state.orientations[key] = angle_to_wd(val.angle)
             state.respawning[key]   = False if val.respawn_in <= 0 else True
             state.has_ammo[key]     = False if val.ammo == 0 else True
         
