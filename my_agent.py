@@ -1302,19 +1302,6 @@ class JointObservation(object):
                 if add_action:
                     available_joint_actions.append(action)
 
-        # If the state key is not recognized in the state action pairs
-        # then the value of that key is set to the initial value.
-        try:
-            action_value_dict = self.state_action_pairs[self.new_state_key]
-        except KeyError:
-            self.state_action_pairs[self.new_state_key] = {}
-            # TODO: in the line below, self.joint_actions should be replaced with available_joint_actions,
-            #       though doing this this results in errors! Why?? This should not be the case!
-            for action in self.joint_actions:
-                self.state_action_pairs[self.new_state_key][action] = self.initial_value
-                action_value_dict = self.state_action_pairs[self.new_state_key]
-        
-
         # Update Q values.
         # If the state key is not recognized in the state action pairs,
         # then the value of that key is set to the initial value.
@@ -1343,7 +1330,6 @@ class JointObservation(object):
                     if value > max_val:
                         max_val = value
                         joint_action = action
-        
 
         # If WoLF is used, update an explicit policy and base action on this policy.
         else:
@@ -1351,7 +1337,7 @@ class JointObservation(object):
                 policy_action_probability_dict = self.WoLF_policy[self.new_state_key]
             except KeyError:
                 self.WoLF_policy[self.new_state_key] = {}
-                for action in available_joint_actions:
+                for action in self.joint_actions:
                     self.WoLF_policy[self.new_state_key][action] = 1.0/len(available_joint_actions)
                     policy_action_probability_dict = self.WoLF_policy[self.new_state_key]
 
