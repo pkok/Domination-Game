@@ -1194,7 +1194,7 @@ class JointObservation(object):
             self.state_action_pairs[self.new_state_key] = {}
             for action in self.joint_actions:
                 self.state_action_pairs[self.new_state_key][action] = self.initial_value
-                action_value_dict = self.state_action_pairs[self.new_state_key])
+                action_value_dict = self.state_action_pairs[self.new_state_key]
         
         # Update old_joint_action
         self.old_joint_action = self.new_joint_action
