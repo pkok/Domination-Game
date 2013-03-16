@@ -1,14 +1,19 @@
 from collections import defaultdict, namedtuple
 from itertools import product
-from random import randint, choice
+#from random import randint, choice
+import random
 import math
-import sys
-import time
+#import sys
+#import time
 import cPickle as pickle
 
+from domination.utilities import angle_fix, point_mul, line_intersects_circ, line_intersects_grid
 from domination.libs import astar
 astar = astar.astar
 
+TEAM_RED = 0
+TEAM_BLUE = 1
+TEAM_NEUTRAL = 2
 
 class Agent(object):
 
@@ -104,11 +109,7 @@ class Agent(object):
 
         # If the agent is not agent 0, its goal has already been computed
         if self.id != 0:
-            try:
-                self.goal = jo.goals[self.id]
-            except IndexError, e:
-                print "***** %s" % repr(self.id)
-                raise
+            self.goal = jo.goals[self.id]
             return
         
         # Intinialise some handy variables
@@ -125,35 +126,17 @@ class Agent(object):
             if agent[3] > 1:
                 have_ammo.append(agent_id)
         
-        cp_data = namedtuple("cp_data", ["location", "distance"])
-        ammo_data = namedtuple("ammo_data", ["location", "distance", "is_present", "timer"])
         cps = [{"location": Agent.INTEREST_POINTS['cp1'], "distance": []},
               {"location": Agent.INTEREST_POINTS['cp2'], "distance": []}]
         ammos = [{"location": Agent.INTEREST_POINTS['am1'], 
                     "distance": [], "is_present": False, "timer": 0},
                  {"location": Agent.INTEREST_POINTS['am2'], 
                     "distance": [], "is_present": False, "timer": 0}]
-        """
-        cp1_loc = Agent.INTEREST_POINTS['cp1']
-        cp2_loc = Agent.INTEREST_POINTS['cp2']
-        am1_loc = Agent.INTEREST_POINTS['am1']
-        am2_loc = Agent.INTEREST_POINTS['am2']
-            
-        cp1_dist = []
-        cp2_dist = []
-        am1_dist = []
-        am2_dist = []
-        
-        ammos[0]["is_present"] = False
-        ammos[1]["is_present"] = False
-        ammos[0]["timer"] = 0
-        ammos[1]["timer"] = 0
-        """
         
         for obj in jo.objects:
             for ammo in ammos:
                 if obj[:2] == ammo["location"]:
-                    ammo_timer = jo.step - jo.objects[obj][0]
+                    ammo["timer"] = jo.step - jo.objects[obj][0]
                     if ammo["timer"] != 0:
                         ammo["timer"] = max(0, self.settings.ammo_rate - ammo["timer"] + 1)
                     else:
@@ -175,7 +158,7 @@ class Agent(object):
         team = int(self.team == TEAM_BLUE)
         controlling_cps = map(lambda cp: cp[2] == team, self.obs.cps)
 
-        """
+        #"""
         if all(controlling_cps):
             danger_zone = min([self.settings.max_range,
                 self.settings.max_speed])
@@ -191,28 +174,27 @@ class Agent(object):
             if safe_cps:
                 cp_dists = []
                 if cps[0]["location"] in safe_cps:
-                    cp_dists += map(lambda x: (x[1], x[0], cps[0],), enumerate(cps[0]["distance"]))
+                    cp_dists += map(lambda x: (x[1], x[0], cps[0]), enumerate(cps[0]["distance"]))
                 if cps[1]["location"] in safe_cps:
-                    cp_dists += map(lambda x: (x[1], x[0], cps[1],), enumerate(cps[1]["distance"]))
+                    cp_dists += map(lambda x: (x[1], x[0], cps[1]), enumerate(cps[1]["distance"]))
                 # Sort the cp distances on the distance per agent.  Each item
                 # is formatted according to (distance, agent_id, cp)
-                sort(cp_dists)
+                sorted(cp_dists)
                 cp_dists = filter(lambda x: x[0] == cp_dists[0][0], cp_dists)
-                nearest = random.choice(cp_dists)
-                chosen_agent = jo.friends[nearest[1]]
-                chosen_cp = nearest[2]["location"]
-                cp_distance = nearest[0]
+                nearest_cp = random.choice(cp_dists)
+                chosen_agent_id = nearest_cp[1]
+                chosen_agent = jo.friends[chosen_agent_id]
+                chosen_cp = nearest_cp[2]["location"]
+                cp_distance = nearest_cp[0]
 
-                dx = ammos[0]["location"][0] - chosen_agent[0]
-                dy = ammos[0]["location"][1] - chosen_agent[1]
-                distance_am1 = (dx**2 + dy**2) ** 0.5
-                dx = ammos[1]["location"][0] - chosen_agent[0]
-                dy = ammos[1]["location"][1] - chosen_agent[1]
-                distance_am2 = (dx**2 + dy**2) ** 0.5
-                if distance_am1 < distance_am2: 
-                    chosen_am = ammos[0]["location"]
-                else:
-                    chosen_am = ammos[1]["location"]
+                ammo_dists = map(lambda x:(x[1], x[0], ammos[0]), enumerate(ammos[0]["distance"]))
+                ammo_dists += map(lambda x:(x[1], x[0], ammos[1]), enumerate(ammos[1]["distance"]))
+                # Sort the ammo distances on the distance per agent.  Each item
+                # is formatted according to (distance, agent_id, ammo)
+                sorted(ammo_dists)
+                ammo_dists = filter(lambda x: x[0] == ammo_dists[0][0], ammo_dists)
+                nearest_ammo = random.choice(ammo_dists)
+                chosen_ammo = nearest_ammo[2]["location"]
 
                 # Agents not "associated" with a CP
                 selectable_agents = filter(lambda friend: 
@@ -221,12 +203,13 @@ class Agent(object):
                 if len(selectable_agents) >= 1:
                     # Select the nearest to the CP
                     # Move this one to the CP
-                    # Move chosen_agent to the chosen_am
+                    goals[chosen_agent_id] = chosen_cp
+                    # Move chosen_agent to the chosen_ammo
                     #return after setting the goals, with commands such as...
                     #     self.joint_observation.goals = goals
                     #     self.goal = goals[self.id]
                     pass
-        """
+        #"""
 
         #If no agent has ammo, follow this policy
         if len(have_ammo) == 0:
@@ -1154,7 +1137,6 @@ class JointObservation(object):
             elif (self.friends[agent_id].y >= objective[1] -3 and objective[1] +3 >= observation.loc[1]):
                 passed_ver = True
             if (passed_ver and passed_hor) or observation.respawn_in > 0:
-                print "%s unlocked." % agent_id
                 self.locked_agent[agent_id] = False
             
         self.friends[agent_id] = AgentData(observation.loc[0], observation.loc[1],
@@ -1270,7 +1252,7 @@ class JointObservation(object):
         
         
         
-        if randint(1,100) * 0.01 >= self.epsilon:
+        if random.randint(1,100) * 0.01 >= self.epsilon:
             joint_action = random.choice(available_joint_actions)
         else:
             max_val = -1000
