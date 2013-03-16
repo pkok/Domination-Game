@@ -1337,7 +1337,7 @@ class JointObservation(object):
                 policy_action_probability_dict = self.WoLF_policy[self.new_state_key]
             except KeyError:
                 self.WoLF_policy[self.new_state_key] = {}
-                for action in self.joint_actions:
+                for action in available_joint_actions:
                     self.WoLF_policy[self.new_state_key][action] = 1.0/len(available_joint_actions)
                     policy_action_probability_dict = self.WoLF_policy[self.new_state_key]
 
