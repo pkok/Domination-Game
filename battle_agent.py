@@ -15,14 +15,19 @@ TEAM_RED = 0
 TEAM_BLUE = 1
 TEAM_NEUTRAL = 2
 
-AGENT_NAMES = {TEAM_RED: ["Megatron", "Starscream", "Blitzwing"], 
-        TEAM_BLUE: ["Optimus Prime", "Bumblebee", "Bulkhead"]}
+possible_names = ["Blossom", "Buttercup", "Bubbles", "Brick", "Boomer",
+"Butch", "Charmander", "Squirtle", "Bulbasaur", "Huey", "Dewey", "Louie",
+"Speedy Cerviche", "Polly Esther", "Guido Anchovy"]
+random.shuffle(possible_names)
+
+AGENT_NAMES = {TEAM_RED: possible_names[:3], 
+        TEAM_BLUE: possible_names[3:6]}
 TEAM_NAMES = ["DECEPTICON", "AUTOBOT"]
 
 
 class Agent(object):
 
-    NAME = "Dalek Thay"
+    NAME = "Toonies"
     RADIUS = 6.0 # Radius in pixels of an agent.
     INTEREST_POINTS = {'cp1':(232, 56), 'cp2':(264, 216), 'am1':(184,168), 'am2':(312,104)}
     
@@ -167,6 +172,64 @@ class Agent(object):
         
         team = int(self.team == TEAM_BLUE)
         controlling_cps = map(lambda cp: cp[2] == team, self.obs.cps)
+
+        #"""
+        if all(controlling_cps):
+            danger_zone = min([self.settings.max_range,
+                self.settings.max_speed])
+            def cp_under_pressure(cp):
+                for foe in jo.foes[jo.step]:
+                    dx = foe[0] - cps[0]
+                    dy = foe[1] - cps[1]
+                    distance = (dx**2 + dy**2) ** 0.5
+                    if distance < danger_zone:
+                        return True
+                return False
+            safe_cps = filter(lambda x: not cp_under_pressure(x), self.obs.cps)
+            if safe_cps:
+                cp_dists = []
+                if cps[0]["location"] in safe_cps:
+                    cp_dists += map(lambda x: (x[1], x[0], cps[0]), enumerate(cps[0]["distance"]))
+                if cps[1]["location"] in safe_cps:
+                    cp_dists += map(lambda x: (x[1], x[0], cps[1]), enumerate(cps[1]["distance"]))
+                # Sort the cp distances on the distance per agent.  Each item
+                # is formatted according to (distance, agent_id, cp)
+                sorted(cp_dists)
+                nearby_cps = filter(lambda x: x[0] == cp_dists[0][0], cp_dists)
+                nearest_cp = random.choice(nearby_cps)
+                chosen_agent_id = nearest_cp[1]
+                chosen_cp = nearest_cp[2]
+
+                ammo_dists = enumerate([ammos[0]["distance"][chosen_agent_id],
+                    ammos[1]["distance"][chosen_agent_id]])
+                sorted(ammo_dists, key=lambda x: x[1])
+                chosen_ammo_id = random.choice(filter(lambda x: x[1] == ammo_dists[0][1]))
+                chosen_ammo = ammos[chosen_ammo_id]
+                # Select nearest agent which:
+                #   - is not chosen_agent
+                #   - does not have another CP as goal
+                selectable_agents = []
+                cp_locations = [cp["location"] for cp in cps]
+                for agent_id in jo.friends:
+                    if (agent_id != chosen_agent_id and 
+                            jo.friends[agent_id][:2] not in cp_locations):
+                        selectable_agents.append(agent_id)
+                if len(selectable_agents) >= 1:
+                    # Select the nearest to the CP
+                    min_distance = float("inf")
+                    for agent_id in selectable_agents:
+                        if chosen_cp["distance"][agent_id] < min_distance:
+                            min_distance = chosen_cp["distance"][agent_id]
+                            helper_agent_id = agent_id
+                    # Move this one to the CP
+                    jo.goals[helper_agent_id] = chosen_cp["location"]
+                    # Move chosen_agent to the chosen_ammo
+                    jo.goals[chosen_agent_id] = chosen_ammo["location"]
+                    self.goal = goals[self.id]
+                    print "*** Setting special actions for %s and %s" % (
+                            chosen_agent_id, helper_agent_id)
+                    return
+        #"""
 
         #If no agent has ammo, follow this policy
         if len(have_ammo) == 0:
@@ -645,7 +708,8 @@ class Agent(object):
             store any learned variables and write logs/reports.
         """
         if self.id == 0 and hasattr(self, 'blobpath') and self.blobpath is not None:
-            data = {'state_action_pairs': self.joint_observation.state_action_pairs}
+            data = {'state_action_pairs': self.joint_observation.state_action_pairs,
+                    'game_histories': self.joint_observation.game_histories}
             try:
                 # We simply write the same content back into the blob.
                 # in a real situation, the new blob would include updates to 
@@ -962,10 +1026,12 @@ class JointObservation(object):
 """
 
     def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents, interest_pts):
+        """
         if team == TEAM_BLUE:
             print JointObservation.ascii_blue
         else:
             print JointObservation.ascii_red
+        """
         self.interest_points = interest_pts
         self.team = team        
         self.grid = grid
@@ -1185,7 +1251,7 @@ class JointObservation(object):
         """
         return filter(lambda x: type(x[2]) is tuple, self.actions.values())
 
-    
+
     def is_deja_vu(self, agent_id):
         """ Check in the game histories if this situation against this team
             reoccurs and if we loose in that setting.  If true, select one of
