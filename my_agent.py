@@ -141,6 +141,7 @@ class Agent(object):
         am1_sqr = self.joint_observation.get_tile_coords(am1_loc)
         am2_sqr = self.joint_observation.get_tile_coords(am2_loc)
         pf_probs = {cp1_sqr: 0.1, cp2_sqr: 0.8, am1_sqr: 0.75,am2_sqr: 0.1}
+        print str(self.get_enemy_pos((0,0),(460,260)))
         
         am_enemy_loc = am1_loc if self.team == TEAM_BLUE else am2_loc
         am_enemy_dist = am1_dist if self.team == TEAM_BLUE else am2_dist
@@ -275,6 +276,7 @@ class Agent(object):
                         min_id = id
                 goals[min_id] = am_enemy_loc
                 assigned.append(min_id)
+            # if enemy presence is low at both, then just go for both
             else:
                 # Send agent closest to cp1 to cp1
                 min_dist, min_id = 10000.0, 0
@@ -444,6 +446,62 @@ class Agent(object):
         
         # Instantiate goal for agent 0
         self.goal = goals[self.id]
+    
+    def get_enemy_pos(self, topleft, bottomright):
+        """ This function uses the observation to pinpoint enemy positions 
+            if it cannot then it will use the particle filter information to
+            estimate the positions
+        """
+        #check observations for enemies within the region
+        enemy_positions = []
+        print str(self.joint_observation.foes[self.joint_observation.step]) + " foes at current timestep"
+        for foe in self.joint_observation.foes[self.joint_observation.step]:
+            pos = self.joint_observation.get_tile_coords((foe[0], foe[1])) 
+            if pos >= topleft and pos <= bottomright:
+                enemy_positions.append([(1, pos)])
+        
+        # exclude lists that has the highest probability of the observed enemies
+        exclude = []
+        for enemy in enemy_positions:
+            highest_prob = -1
+            list_nr = -1
+            for i in range(len(self.joint_observation.mc_probs)):
+                if not( i in exclude ) and enemy[0][1] in self.joint_observation.mc_probs[i]:
+                    if self.joint_observation.mc_probs[i][enemy[0][1]] > highest_prob:
+                        highest_prob = self.joint_observation.mc_probs[i][enemy[0][1]]
+                        list_nr = i
+            exclude.append(list_nr)
+        
+        # of the remaining lists
+        # make a list of the probabilities within the region topleft to bottomright
+        prob_list = []
+        for i in range(len(self.joint_observation.mc_probs)):
+            if not( i in exclude ):
+                prob_list.append([])
+                for x in range(int(math.floor(topleft[0]/16.0)), int(math.floor(bottomright[0]/16.0))+1):
+                    for y in range(int(math.floor(topleft[1]/16.0)), int(math.floor(bottomright[1]/16.0))+1):
+                        x_coord = x * 16
+                        y_coord = y * 16
+                        if (x_coord, y_coord) in self.joint_observation.mc_probs[i]:
+                            prob_list[-1].append( (self.joint_observation.mc_probs[i][(x_coord, y_coord)], (x_coord, y_coord)) )
+        
+        threshold = 0
+        # sort the remaining lists
+        sorted_prob_list = []
+        
+        for i in range(len(prob_list)):
+            temp_list = sorted(prob_list[i], reverse=True)
+            # pick items with a probability above the threshold
+            item_list = []
+            for item in temp_list:
+                if item[0] > threshold:
+                    item_list.append(item)
+            sorted_prob_list.append(item_list)
+        print str(sorted_prob_list)
+        # results are the observed enemy positions and the picked PF positions
+        enemy_positions.extend(sorted_prob_list)
+        
+        return enemy_positions
     
     def get_action(self):
         """This function returns the action tuple for the agent.
