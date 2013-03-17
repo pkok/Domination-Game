@@ -40,6 +40,9 @@ TEAM_NAMES = ["DECEPTICON", "AUTOBOT"]
 
 USE_SARSA = False
 
+# Need at least so many games against this opponent to pick a random action
+HISTORIC_THRESHOLD = 5
+
 class Agent(object):
 
     NAME = "Toonies"
@@ -120,9 +123,7 @@ class Agent(object):
                 self.goal = self.joint_observation.goals[self.id]
         
         # Compute and return the corresponding action
-        # TODO: add is_deja_vu(agent_id) to JO for chosing a random action
-        # when we have played this game already like this and we lost
-        action = self.get_action(random=self.joint_observation.is_deja_vu(self.id))
+        action = self.get_action(randomize=self.joint_observation.deja_vu(self.id))
         self.joint_observation.update_action(self.id, action)
         return action
 
@@ -218,9 +219,7 @@ class Agent(object):
                 # is formatted according to (distance, agent_id, cp)
                 cp_dists.sort()
                 nearby_cps = filter(lambda x: x[0] == cp_dists[0][0], cp_dists)
-                print ">>>> " + str(nearby_cps)
-                nearest_cp = random.choice(nearby_cps)
-                print ">>>> Chosen record: " + str(nearest_cp)
+                nearest_cp = nearby_cps[0] #random.choice(nearby_cps)
                 assigned.append(nearest_cp[1])
                 chosen_cp = nearest_cp[2]
 
@@ -228,8 +227,8 @@ class Agent(object):
                         enumerate([ammos[0]["distance"][assigned[0]], 
                             ammos[1]["distance"][assigned[0]]]))
                 ammo_dists.sort(key=lambda x: x[1])
-                chosen_ammo_id = random.choice(
-                        filter(lambda x: x[0] == ammo_dists[0][0], ammo_dists))[1]
+                nearby_ammos = filter(lambda x: x[0] == ammo_dists[0][0], ammo_dists)
+                chosen_ammo_id = nearby_ammos[0][1] #random.choice(nearby_ammos)[1]
                 chosen_ammo = ammos[chosen_ammo_id]
                 # Select nearest agent which:
                 #   - is not chosen_agent
@@ -251,10 +250,6 @@ class Agent(object):
                     jo.goals[assigned[1]] = chosen_cp["location"]
                     # Move chosen_agent to the chosen_ammo
                     jo.goals[assigned[0]] = chosen_ammo["location"]
-                    print "*** Setting special goals for %s and %s" % (
-                            assigned[0], assigned[1])
-                    print "***** Goal for chosen: " + str(jo.goals[assigned[0]])
-                    print "***** Goal for helper: " + str(jo.goals[assigned[1]])
                     return
         #"""
 
@@ -423,12 +418,12 @@ class Agent(object):
         
         # Set the joint goal
         jo.goals = goals
-    
-    def get_action(self, random=False):
+
+    def get_action(self, randomize=False):
         """This function returns the action tuple for the agent.
         """
         path = []
-        if random:
+        if randomize:
             max_speed = self.settings.max_speed
             max_turn = self.settings.max_turn
             random_angle = random.uniform(-max_turn, max_turn)
@@ -441,13 +436,14 @@ class Agent(object):
             for ip in Agent.INTEREST_POINTS:
                 if self.goal == Agent.INTEREST_POINTS[ip]:
                     path = self.joint_observation.paths[self.id][ip][0]
-            
+
             if not path:
                 # Compute path and angle to path
                 path = find_single_path(self.obs.loc, self.obs.angle,
                         self.goal, self.mesh, self.grid,
                         self.settings.max_speed, self.settings.max_turn,
                         self.settings.tilesize)
+
         if path:
             dx = path[0][0] - self.obs.loc[0]
             dy = path[0][1] - self.obs.loc[1]
@@ -479,8 +475,8 @@ class Agent(object):
         """ Is it safe/smart to drive backwards?
         """
         # TODO: Find smarter criterion
-        angle_threshold = 0
-        #angle_threshold = 1 * math.pi / 180
+        #angle_threshold = 0
+        angle_threshold = 1 * math.pi / 180
         return abs(reverse_angle) < (abs(forward_angle) + angle_threshold)
     
     def compute_shoot(self, path_angle):
@@ -737,7 +733,7 @@ class Agent(object):
             store any learned variables and write logs/reports.
         """
         if self.id == 0 and hasattr(self, 'blobpath') and self.blobpath is not None:
-            data = self.joint_observation.generate_blob_data()
+            data = self.joint_observation.generate_blob_data(interrupted)
             try:
                 # We simply write the same content back into the blob.
                 # in a real situation, the new blob would include updates to 
@@ -747,7 +743,7 @@ class Agent(object):
                 print "Blob saved.\n"
             except:
                 # We can't write to the blob, this is normal on AppEngine since
-                # we don't have filesystem access there.        
+                # we don't have filesystem access there.
                 print "%s can't write blob to path %s" % (
                         self.id, self.blobpath)
                 print "=== BEGIN_BLOB ===\n" + pickle.dumps(data) + "\n=== END BLOB ==="
@@ -1066,7 +1062,6 @@ class JointObservation(object):
         self.grid = grid
         self.mesh = transform_mesh(nav_mesh, interest_pts, grid, settings.tilesize, settings.max_speed, settings.max_turn)
         self.match_id = matchinfo.match_id
-        self.game_histories = {}
         self.state_action_pairs = {}
         self.epsilon = epsilon
         self.gamma = gamma
@@ -1173,6 +1168,12 @@ class JointObservation(object):
         # Keep track of actions from other agents during each timestep
         self.actions = {} # agent_id: (turn, speed, shoot)
 
+        # For random action selection in game situations which have occured
+        # too often
+        self.game_histories = {} # match_id: {action[0:n]: score}
+        self.action_log = [] # list of joint_actions
+        self.random_action_agent = -1 # will be set to positive values
+
     def update(self, agent_id, observation):
         """ Update the joint observation with a single agent's observation
             information.
@@ -1232,6 +1233,7 @@ class JointObservation(object):
                     self.walls[wall].remove(agent_id)
                 except KeyError:
                     pass
+        self.score = observation.score
         self.diff_score = (observation.score[0] - self.score[0],
                            observation.score[1] - self.score[1])
         self.ammo[agent_id] = observation.ammo
@@ -1265,7 +1267,7 @@ class JointObservation(object):
             for agents to decide which action to take.
         """
         if agent_id == (self.number_of_agents - 1):
-            self.game_histories[self.match_id][-1].append(self.actions)
+            self.action_log.append(tuple(self.actions.items()))
             self.actions = {}
         else:
             self.actions[agent_id] = action_tuple
@@ -1278,12 +1280,61 @@ class JointObservation(object):
         self.state_action_pairs = data['state_action_pairs']
         self.game_histories = data['game_histories']
         if not self.game_histories.has_key(self.match_id):
-            self.game_histories[self.match_id] = [[]]
+            self.game_histories[self.match_id] = {}
 
-    def generate_blob_data(self):
-        game_history_frequencies = [] # Count how often histories occured.
+    def generate_blob_data(self, interrupted=False):
+        self.finalize_history(interrupted)
         return {'state_action_pairs': self.state_action_pairs,
                 'game_histories': self.game_histories}
+
+    def deja_vu(self, agent_id):
+        """ Check in the game histories if this situation against this team
+            reoccurs and if we loose in that setting.  If true, select one of
+            the three agents to take a random action.
+        """
+        # TODO: Lots!
+        #   - Record the (step, agent_id, random action) tuple
+        #   - If this action lead to a more succesful state,  write it to the
+        #     blob, and use it the next time again!
+        if self.random_action_agent >= 0:
+            if self.random_action_agent == agent_id:
+                self.random_action_agent = -1
+                print u'%s: "D\u00e9j\u00e0 vu!"' % agent_id
+                return True
+            return False
+
+        if agent_id == 0:
+            try:
+                scores = self.game_histories[self.match_id][tuple(self.action_log)]
+                imperfection_score = sum(map(lambda score: imperfection_coefficient(score), scores))
+                print "%s scores, %2.5f" % (len(scores), imperfection_score /
+                        len(scores))
+                if len(scores) > HISTORIC_THRESHOLD and imperfection_score / len(scores) > 0.5:
+                    self.random_action_agent = random.randint(0, self.number_of_agents)
+                    print "%s will act randomly" % self.random_action_agent
+                    return self.deja_vu(agent_id)
+            except KeyError:
+                print "new action log!"
+                pass
+        return False
+
+    def finalize_history(self, interrupted):
+        if interrupted:
+            return
+
+        if self.team == TEAM_RED:
+            score = self.score
+        else:
+            score = self.score[1], self.score[0]
+        if not self.game_histories.has_key(self.match_id):
+            self.game_histories[self.match_id] = {}
+        game_histories = self.game_histories[self.match_id]
+        for i in xrange(1, len(self.action_log)):
+            sublist = tuple(self.action_log[:i])
+            if not game_histories.has_key(sublist):
+                game_histories[sublist] = []
+            game_histories[sublist].append(score) 
+        self.action_log = []
 
     def goal_chosen(self, goal):
         """ Check if an other agent is moving towards the same goal.
@@ -1297,14 +1348,6 @@ class JointObservation(object):
         """ A list of foes that are targeted to be shot.
         """
         return filter(lambda x: type(x[2]) is tuple, self.actions.values())
-
-
-    def is_deja_vu(self, agent_id):
-        """ Check in the game histories if this situation against this team
-            reoccurs and if we loose in that setting.  If true, select one of
-            the three agents to take a random action.
-        """
-        return False
 
 
     def chooseJointAction(self):
@@ -1523,3 +1566,11 @@ def named_int(names, value=None):
         return NamedInt(value)
     else:
         return NamedInt
+
+
+def imperfection_coefficient(score):
+    if score[0] < score[1]:
+        return 1.
+    else:
+        mid_score = 0.5 * (score[0] + score[1])
+    return math.sqrt(2*mid_score - score[0]) / math.sqrt(mid_score)
