@@ -15,15 +15,30 @@ TEAM_RED = 0
 TEAM_BLUE = 1
 TEAM_NEUTRAL = 2
 
-possible_names = ["Blossom", "Buttercup", "Bubbles", "Brick", "Boomer",
-"Butch", "Charmander", "Squirtle", "Bulbasaur", "Huey", "Dewey", "Louie",
-"Speedy Cerviche", "Polly Esther", "Guido Anchovy"]
+KEEP_GOAL = (-1, -1)
+
+possible_names = [
+    "Blossom", "Buttercup", "Bubbles", # Powerpuff girls
+    "Brick", "Boomer", "Butch", # Rowdyruff boys 
+    "Charmander", "Squirtle", "Bulbasaur", # Original 3 starter Pokemon
+    "Huey", "Dewey", "Louie", # Donald Duck's nephews
+    "Speedy Cerviche", "Polly Esther", "Guido Anchovy", # Samurai Pizza Cats
+    "Melchior", "Caspar", "Balthazar", # Three Magi
+    "Pater", "Filius", "Spiritus Sanctus", # Christian Trinity
+    "Belgium", "The Netherlands", "Luxembourg", # The BeNeLux
+    "Red", "Green", "Blue", # Colors!
+    "Hue", "Saturation", "Intensity", # Other colorspace!
+    "x", "y", "z", # Math
+]
 random.shuffle(possible_names)
+
+possible_names = map(lambda x: "Agent " + x, "012012")
 
 AGENT_NAMES = {TEAM_RED: possible_names[:3], 
         TEAM_BLUE: possible_names[3:6]}
 TEAM_NAMES = ["DECEPTICON", "AUTOBOT"]
 
+USE_SARSA = False
 
 class Agent(object):
 
@@ -40,6 +55,8 @@ class Agent(object):
         
         self.id = named_int(AGENT_NAMES[team], id)
         self.team = named_int(TEAM_NAMES, team)
+        self.id = id
+        self.team = team
         self.settings = settings
         # self.state_action_pairs = defaultdict(lambda: [None, 10])
         self.epsilon = 0.05
@@ -48,7 +65,10 @@ class Agent(object):
         self.initial_value = 10
         self.number_of_agents = 3
         # self.joint_actions = createJointActions(self.joint_observation) # Fill the joint_actions object with all possible joint actions.
-        self.joint_observation = JointObservation(settings, field_grid, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.initial_value, self.number_of_agents, Agent.INTEREST_POINTS)
+        self.joint_observation = JointObservation(settings, field_grid, team,
+                nav_mesh, self.epsilon, self.gamma, self.alpha,
+                self.initial_value, self.number_of_agents,
+                Agent.INTEREST_POINTS, matchinfo)
         # self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
         self.grid = field_grid
@@ -64,9 +84,7 @@ class Agent(object):
             # Remember the blob path so we can write back to it
             self.blobpath = blob.name
             data = pickle.loads(blob.read())
-            if not data.has_key('state_action_pairs'):
-                data['state_action_pairs'] = {}
-            self.joint_observation.state_action_pairs = data['state_action_pairs']
+            self.joint_observation.process_blob_data(data)
             print "%s received binary blob of %s" % (
                 self.id, type(data))
             # Reset the file so other agents can read it too.
@@ -94,8 +112,12 @@ class Agent(object):
             return a tuple in the form: (turn, speed, shoot)
         """ 
         # Compute the goal
-        # self.set_goal_sarsa()
-        self.set_goal_hardcoded()
+        if USE_SARSA:
+            self.set_goal_sarsa()
+        else:
+            self.set_goal_hardcoded()
+            if self.joint_observation.goals[self.id] != KEEP_GOAL:
+                self.goal = self.joint_observation.goals[self.id]
         
         # Compute and return the corresponding action
         # TODO: add is_deja_vu(agent_id) to JO for chosing a random action
@@ -124,11 +146,10 @@ class Agent(object):
 
         # If the agent is not agent 0, its goal has already been computed
         if self.id != 0:
-            self.goal = jo.goals[self.id]
             return
         
-        # Intinialise some handy variables
-        goals = [(0,0), (0,0), (0.0)]
+        # Initialise some handy variables
+        goals = [KEEP_GOAL, KEEP_GOAL, KEEP_GOAL]
         assigned = []       
         ammo_chart = {}
         for agent_id, agent in jo.friends.items():
@@ -141,12 +162,12 @@ class Agent(object):
             if agent[3] > 1:
                 have_ammo.append(agent_id)
         
-        cps = [{"location": Agent.INTEREST_POINTS['cp1'], "distance": []},
-              {"location": Agent.INTEREST_POINTS['cp2'], "distance": []}]
+        cps = [{"location": Agent.INTEREST_POINTS['cp1'], "distance": {}},
+              {"location": Agent.INTEREST_POINTS['cp2'], "distance": {}}]
         ammos = [{"location": Agent.INTEREST_POINTS['am1'], 
-                    "distance": [], "is_present": False, "timer": 0},
+                    "distance": {}, "is_present": False, "timer": 0},
                  {"location": Agent.INTEREST_POINTS['am2'], 
-                    "distance": [], "is_present": False, "timer": 0}]
+                    "distance": {}, "is_present": False, "timer": 0}]
         
         for obj in jo.objects:
             for ammo in ammos:
@@ -165,10 +186,10 @@ class Agent(object):
             else:
                 respawn_time = 0
             # Calculate distances
-            cps[0]["distance"].append(jo.paths[id]['cp1'][1] + respawn_time)
-            cps[1]["distance"].append(jo.paths[id]['cp2'][1] + respawn_time)
-            ammos[0]["distance"].append(jo.paths[id]['am1'][1] + respawn_time)
-            ammos[1]["distance"].append(jo.paths[id]['am2'][1] + respawn_time)
+            cps[0]["distance"][id] = jo.paths[id]['cp1'][1] + respawn_time
+            cps[1]["distance"][id] = jo.paths[id]['cp2'][1] + respawn_time
+            ammos[0]["distance"][id] = jo.paths[id]['am1'][1] + respawn_time
+            ammos[1]["distance"][id] = jo.paths[id]['am2'][1] + respawn_time
         
         team = int(self.team == TEAM_BLUE)
         controlling_cps = map(lambda cp: cp[2] == team, self.obs.cps)
@@ -179,31 +200,36 @@ class Agent(object):
                 self.settings.max_speed])
             def cp_under_pressure(cp):
                 for foe in jo.foes[jo.step]:
-                    dx = foe[0] - cps[0]
-                    dy = foe[1] - cps[1]
+                    dx = foe[0] - cp[0]
+                    dy = foe[1] - cp[1]
                     distance = (dx**2 + dy**2) ** 0.5
                     if distance < danger_zone:
                         return True
                 return False
-            safe_cps = filter(lambda x: not cp_under_pressure(x), self.obs.cps)
+            safe_cps = map(lambda x: x[:2], 
+                    filter(lambda x: not cp_under_pressure(x), self.obs.cps))
             if safe_cps:
                 cp_dists = []
                 if cps[0]["location"] in safe_cps:
-                    cp_dists += map(lambda x: (x[1], x[0], cps[0]), enumerate(cps[0]["distance"]))
+                    cp_dists += map(lambda x: (x[1], x[0], cps[0]), cps[0]["distance"].items())
                 if cps[1]["location"] in safe_cps:
-                    cp_dists += map(lambda x: (x[1], x[0], cps[1]), enumerate(cps[1]["distance"]))
+                    cp_dists += map(lambda x: (x[1], x[0], cps[1]), cps[1]["distance"].items())
                 # Sort the cp distances on the distance per agent.  Each item
                 # is formatted according to (distance, agent_id, cp)
-                sorted(cp_dists)
+                cp_dists.sort()
                 nearby_cps = filter(lambda x: x[0] == cp_dists[0][0], cp_dists)
+                print ">>>> " + str(nearby_cps)
                 nearest_cp = random.choice(nearby_cps)
-                chosen_agent_id = nearest_cp[1]
+                print ">>>> Chosen record: " + str(nearest_cp)
+                assigned.append(nearest_cp[1])
                 chosen_cp = nearest_cp[2]
 
-                ammo_dists = enumerate([ammos[0]["distance"][chosen_agent_id],
-                    ammos[1]["distance"][chosen_agent_id]])
-                sorted(ammo_dists, key=lambda x: x[1])
-                chosen_ammo_id = random.choice(filter(lambda x: x[1] == ammo_dists[0][1]))
+                ammo_dists = map(lambda x: (x[1], x[0]), 
+                        enumerate([ammos[0]["distance"][assigned[0]], 
+                            ammos[1]["distance"][assigned[0]]]))
+                ammo_dists.sort(key=lambda x: x[1])
+                chosen_ammo_id = random.choice(
+                        filter(lambda x: x[0] == ammo_dists[0][0], ammo_dists))[1]
                 chosen_ammo = ammos[chosen_ammo_id]
                 # Select nearest agent which:
                 #   - is not chosen_agent
@@ -211,23 +237,24 @@ class Agent(object):
                 selectable_agents = []
                 cp_locations = [cp["location"] for cp in cps]
                 for agent_id in jo.friends:
-                    if (agent_id != chosen_agent_id and 
+                    if (agent_id not in assigned and 
                             jo.friends[agent_id][:2] not in cp_locations):
                         selectable_agents.append(agent_id)
-                if len(selectable_agents) >= 1:
-                    # Select the nearest to the CP
+                if selectable_agents:
+                    # Select the nearest to the CP and move it to the CP
                     min_distance = float("inf")
+                    assigned.append(-1)
                     for agent_id in selectable_agents:
                         if chosen_cp["distance"][agent_id] < min_distance:
                             min_distance = chosen_cp["distance"][agent_id]
-                            helper_agent_id = agent_id
-                    # Move this one to the CP
-                    jo.goals[helper_agent_id] = chosen_cp["location"]
+                            assigned[-1] = agent_id
+                    jo.goals[assigned[1]] = chosen_cp["location"]
                     # Move chosen_agent to the chosen_ammo
-                    jo.goals[chosen_agent_id] = chosen_ammo["location"]
-                    self.goal = goals[self.id]
-                    print "*** Setting special actions for %s and %s" % (
-                            chosen_agent_id, helper_agent_id)
+                    jo.goals[assigned[0]] = chosen_ammo["location"]
+                    print "*** Setting special goals for %s and %s" % (
+                            assigned[0], assigned[1])
+                    print "***** Goal for chosen: " + str(jo.goals[assigned[0]])
+                    print "***** Goal for helper: " + str(jo.goals[assigned[1]])
                     return
         #"""
 
@@ -396,11 +423,6 @@ class Agent(object):
         
         # Set the joint goal
         jo.goals = goals
-        
-        # Instantiate goal for agent 0
-        self.goal = goals[0]
-
-        self.joint_observation = jo
     
     def get_action(self, random=False):
         """This function returns the action tuple for the agent.
@@ -677,12 +699,19 @@ class Agent(object):
             surface.fill((0,0,0,0))    
         
         # Draw a red, green and blue dot on agent 1, 2, and 3.
-        color = ((255,0,0), (0,255,0), (0,0,255))
+        color = ((200,0,0), (0,200,0), (0,0,200))
         agent_color = color[self.id % len(color)]
         pygame.draw.circle(surface, agent_color, self.obs.loc, 1)
 
+        # Write a small ammo count near the agent
+        font = pygame.font.SysFont("monospace", 10)
+        label = font.render(str(self.obs.ammo), True, agent_color)
+        label_pos = (self.obs.loc[0], self.obs.loc[1] + 5)
+        surface.blit(label, label_pos)
+
         # Draw line to goal along the planned path
         if self.goal is not None:
+            path = None
             for ip in Agent.INTEREST_POINTS:
                 if self.goal == Agent.INTEREST_POINTS[ip]:
                     path = self.joint_observation.paths[self.id][ip][0]
@@ -708,8 +737,7 @@ class Agent(object):
             store any learned variables and write logs/reports.
         """
         if self.id == 0 and hasattr(self, 'blobpath') and self.blobpath is not None:
-            data = {'state_action_pairs': self.joint_observation.state_action_pairs,
-                    'game_histories': self.joint_observation.game_histories}
+            data = self.joint_observation.generate_blob_data()
             try:
                 # We simply write the same content back into the blob.
                 # in a real situation, the new blob would include updates to 
@@ -1025,7 +1053,8 @@ class JointObservation(object):
                                  ZZZZZZZZZZZZZ
 """
 
-    def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha, initial_value, number_of_agents, interest_pts):
+    def __init__(self, settings, grid, team, nav_mesh, epsilon, gamma, alpha,
+            initial_value, number_of_agents, interest_pts, matchinfo):
         """
         if team == TEAM_BLUE:
             print JointObservation.ascii_blue
@@ -1036,6 +1065,8 @@ class JointObservation(object):
         self.team = team        
         self.grid = grid
         self.mesh = transform_mesh(nav_mesh, interest_pts, grid, settings.tilesize, settings.max_speed, settings.max_turn)
+        self.match_id = matchinfo.match_id
+        self.game_histories = {}
         self.state_action_pairs = {}
         self.epsilon = epsilon
         self.gamma = gamma
@@ -1211,7 +1242,7 @@ class JointObservation(object):
         
         
         self.called_agents.add(agent_id)
-        if len(self.called_agents) == self.number_of_agents:
+        if USE_SARSA and len(self.called_agents) == self.number_of_agents:
             self.state = self.process_joint_observation() # Process the joint observation
             self.new_state_key = self.state.toKey()
             self.chooseJointAction()
@@ -1234,9 +1265,25 @@ class JointObservation(object):
             for agents to decide which action to take.
         """
         if agent_id == (self.number_of_agents - 1):
+            self.game_histories[self.match_id][-1].append(self.actions)
             self.actions = {}
         else:
             self.actions[agent_id] = action_tuple
+
+    def process_blob_data(self, data):
+        if not data.has_key('state_action_pairs'):
+            data['state_action_pairs'] = {}
+        if not data.has_key('game_histories'):
+            data['game_histories'] = {}
+        self.state_action_pairs = data['state_action_pairs']
+        self.game_histories = data['game_histories']
+        if not self.game_histories.has_key(self.match_id):
+            self.game_histories[self.match_id] = [[]]
+
+    def generate_blob_data(self):
+        game_history_frequencies = [] # Count how often histories occured.
+        return {'state_action_pairs': self.state_action_pairs,
+                'game_histories': self.game_histories}
 
     def goal_chosen(self, goal):
         """ Check if an other agent is moving towards the same goal.
