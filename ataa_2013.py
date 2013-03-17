@@ -64,7 +64,7 @@ class Tournament1(scenarios.Scenario):
                               think_time=0.06,)
 
 class Tournament2(scenarios.Scenario):
-    REPEATS   = 1
+    REPEATS   = 5
     GENERATOR = None
     FIELD     = core.Field.from_string(FIELD2)
     SETTINGS  = core.Settings(max_steps=300,
@@ -110,7 +110,11 @@ if __name__ == '__main__':
 
     if args.test == True:
         # TOD: Waarom savet de agents alleen zijn blobs in test mode? Should be fixed!
-        Tournament2.test(red=args.red_agent, blue=args.blue_agent)
+        tournament = Tournament2()
+        match_id = hash((args.red_agent, args.blue_agent))
+        tournament._single(red=args.red_agent, blue=args.blue_agent,
+                matchinfo=scenarios.MatchInfo(1, 1, match_id, 1),
+                rendered=True, verbose=True)
     else:
         now = datetime.datetime.now()
         folder = os.path.join('tournaments', now.strftime("%Y%m%d-%H%M"))
