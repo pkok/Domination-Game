@@ -1493,6 +1493,9 @@ class JointObservation(object):
         """
         #for tile in self.mc_probs[0]:
         #    print (tile, self.mc_probs[0][tile])
+        for id in range(len(self.mc_points)):
+           print len(self.mc_points[id])
+        print '\r\n'
         
         # Update MC points
         if not self.step == 1:
@@ -1511,8 +1514,39 @@ class JointObservation(object):
             y_offset = random.uniform(-self.settings.max_speed, self.settings.max_speed)
             new_x= point[0] + x_offset
             new_y = point[1] + y_offset
-            new_points.append((new_x, new_y))
+            new_point = (new_x, new_y)
+            
+            # Check if point is in current line of sight
+            in_vision = self.check_vision(new_point)
+            
+            # Check if point is on the map
+            in_bounds = self.check_bounds(new_point)
+            
+            # Add new point to the list
+            if not in_vision and in_bounds:
+                new_points.append(new_point)
         return new_points
+
+    def check_vision(self, point):
+        """Checks whether a point is in vision of at least one agent
+        """
+        for id in self.friends:
+            if (point[0] >= (self.friends[id][0] - self.settings.max_see)
+                and point[0] <= (self.friends[id][0] + self.settings.max_see)
+                and point[1] >= (self.friends[id][1] - self.settings.max_see)
+                and point[1] <= (self.friends[id][1] + self.settings.max_see)):
+                return True
+        return False
+
+    def check_bounds(self, point):
+        """Checks whether a point is within bounds of the field
+        """
+        if point[0] >= 464 or point[0] < 16:
+            return False
+        elif point[1] >= 256 or point[1] < 16:
+            return False
+        else:
+            return True
 
     def update_MC_probs(self, id):
         """Calculate new probabilities using the updated MC points
@@ -1529,7 +1563,7 @@ class JointObservation(object):
         x = int(math.floor(pos[0]/16.0)*16.0)
         y = int(math.floor(pos[1]/16.0)*16.0)
         
-        return self.correct_tile_coords((x,y))
+        return (x,y) #self.correct_tile_coords((x,y))
 
     def correct_tile_coords(self, coords):
         
