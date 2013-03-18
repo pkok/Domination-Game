@@ -1176,87 +1176,6 @@ class JointObservation(object):
         # Perform Monte Carlo localisation
         if agent_id == (self.number_of_agents - 1):
             self.MC_localisation()
-        
-        
-    def init_MC_points(self):
-        """Initialise Monte Carlo points for each foe at their start position
-        """
-        mc_points = []
-        for pos in self.enemy_spawn_pos:
-            mc_points.append(self.init_MC_points_single(pos))
-        return mc_points
-        
-    def init_MC_points_single(self, loc):
-        return [loc] * self.mc_count
-
-    def init_MC_probs(self):
-        mc_probs = []
-        for i in range(self.number_of_agents):
-            mc_probs.append(self.init_MC_probs_single())
-        return mc_probs
-        
-    def init_MC_probs_single(self):
-        mc_probs = []
-        tile_dict = {}
-        
-        #walls = [(64,96),(64,112)]
-        for x in range(16,480,16):
-            for y in range(16,272,16):
-                tile_dict[(x,y)] = 0.0
-        
-        return tile_dict
-
-    def MC_localisation(self):
-        """Perform Monte Carlo localisation
-        """
-        # Update MC points
-        if not self.step == 1:
-            for id in range(self.number_of_agents):
-                self.update_MC_points(id)
-            
-        # Update tile probabilities
-        for id in range(self.number_of_agents):
-            self.mc_probs[id] = self.update_MC_probs(id)
-    
-    def update_MC_points(self, id):
-        new_points = []
-        for point in self.mc_points[id]:
-            new_points = point
-
-    def update_MC_probs(self, id):
-        """Calculate new probabilities using the updated MC points
-        """
-        new_MC_probs = self.init_MC_probs_single()
-        
-        for point in self.mc_points[id]:
-            tile = self.get_tile_coords(point)
-            new_MC_probs[tile] = new_MC_probs[tile] + 1.0/len(self.mc_points)
-        
-        return new_MC_probs
-        
-    def get_tile_coords(self, pos):
-        x = int(math.floor(pos[0]/16.0)*16.0)
-        y = int(math.floor(pos[1]/16.0)*16.0)
-        
-        return self.correct_tile_coords((x,y))
-
-    def correct_tile_coords(self, coords):
-        
-        if coords[0] > 464:
-            x = 464
-        elif coords[0] < 16:
-            x = 16
-        else:
-            x = coords[0]
-        
-        if coords[1] > 256:
-            y = 256
-        elif coords[1] < 16:
-            y = 16
-        else:
-            y = coords[1]
-        
-        return (x,y)
 
     def update_action(self, agent_id, action_tuple):
         """ Register the chosen action of agents.  This information can be
@@ -1536,7 +1455,99 @@ class JointObservation(object):
                 state.control_points[(cpx, cpy)] = False
 
         return state
+    
+    ########################################################################
+    ##### Code for MC Localisation #########################################
+    ########################################################################
+    
+    def init_MC_points(self):
+        """Initialise Monte Carlo points for each foe at their start position
+        """
+        mc_points = []
+        for pos in self.enemy_spawn_pos:
+            mc_points.append(self.init_MC_points_single(pos))
+        return mc_points
+        
+    def init_MC_points_single(self, loc):
+        return [loc] * self.mc_count
 
+    def init_MC_probs(self):
+        mc_probs = []
+        for i in range(self.number_of_agents):
+            mc_probs.append(self.init_MC_probs_single())
+        return mc_probs
+        
+    def init_MC_probs_single(self):
+        mc_probs = []
+        tile_dict = {}
+        
+        #walls = [(64,96),(64,112)]
+        for x in range(16,480,16):
+            for y in range(16,272,16):
+                tile_dict[(x,y)] = 0.0
+        
+        return tile_dict
+
+    def MC_localisation(self):
+        """Perform Monte Carlo localisation
+        """
+        #for tile in self.mc_probs[0]:
+        #    print (tile, self.mc_probs[0][tile])
+        
+        # Update MC points
+        if not self.step == 1:
+            for id in range(self.number_of_agents):
+                self.mc_points[id] = self.update_MC_points(id)
+            
+        # Update tile probabilities
+        for id in range(self.number_of_agents):
+            self.mc_probs[id] = self.update_MC_probs(id)
+    
+    def update_MC_points(self, id):
+        new_points = []
+        for point in self.mc_points[id]:
+            # Calculate the new position of the point
+            x_offset = random.uniform(-self.settings.max_speed, self.settings.max_speed)
+            y_offset = random.uniform(-self.settings.max_speed, self.settings.max_speed)
+            new_x= point[0] + x_offset
+            new_y = point[1] + y_offset
+            new_points.append((new_x, new_y))
+        return new_points
+
+    def update_MC_probs(self, id):
+        """Calculate new probabilities using the updated MC points
+        """
+        new_MC_probs = self.init_MC_probs_single()
+        
+        for point in self.mc_points[id]:
+            tile = self.get_tile_coords(point)
+            new_MC_probs[tile] = new_MC_probs[tile] + 1.0/len(self.mc_points[id])
+        
+        return new_MC_probs
+        
+    def get_tile_coords(self, pos):
+        x = int(math.floor(pos[0]/16.0)*16.0)
+        y = int(math.floor(pos[1]/16.0)*16.0)
+        
+        return self.correct_tile_coords((x,y))
+
+    def correct_tile_coords(self, coords):
+        
+        if coords[0] > 464:
+            x = 464
+        elif coords[0] < 16:
+            x = 16
+        else:
+            x = coords[0]
+        
+        if coords[1] > 256:
+            y = 256
+        elif coords[1] < 16:
+            y = 16
+        else:
+            y = coords[1]
+        
+        return (x,y)
 
 ########################################################################
 ##### State class ######################################################
