@@ -1008,6 +1008,7 @@ class JointObservation(object):
         # State space value representation
         self.state_action_pairs = {}
         self.WoLF_policy = {}
+        self.avg_policy = {}
         
         # Learning constants
         self.epsilon = epsilon
@@ -1025,6 +1026,8 @@ class JointObservation(object):
         self.locked_agent = [False] * self.number_of_agents
         self.new_joint_action = -1
         self.old_joint_action = -1
+        self.available_joint_actions = []
+        self.old_available_joint_actions = []
         self.reward = 0
 
         # Regions of interest; placeholders for the cp and ammo points in the current learning setting
@@ -1070,7 +1073,6 @@ class JointObservation(object):
         # Create a list of all possible joint actions
         interestRegions = self.ROI["cp"] + self.ROI["am"]
         self.joint_actions = list(product(interestRegions, repeat=self.number_of_agents))
-        
 
         # Keep track of paths to interest points for each agent at each timestep
         self.paths = {} # agent_id: {'cp1':(path,length), ..}
@@ -1158,10 +1160,14 @@ class JointObservation(object):
             self.new_state_key = self.state.toKey() # key used to lookup in the state action dict
             self.chooseJointAction() # choose a new joint action
             self.setReward() # determine the reward for the current state
-
             if self.old_state_key != -1:
-                self.update_policy(self.old_state_key, self.new_state_key) # Update policy when joint observation has been processed
-        
+                self.update_policy() # Update policy when joint observation has been processed
+
+            # Remember the values of the current state as values of previous state
+            self.old_state_key = self.new_state_key
+            self.old_joint_action = self.new_joint_action
+            self.old_available_joint_actions = self.available_joint_actions
+
         # find all paths for the current agent to every interest point
         self.paths[agent_id] = find_all_paths(observation.loc, observation.angle, self.interest_points, 
                                 self.mesh, self.grid, self.settings.max_speed, self.settings.max_turn,
@@ -1286,10 +1292,10 @@ class JointObservation(object):
         self.old_joint_action = self.new_joint_action
 
         # brute force acquisition of available actions
-        available_joint_actions = []
+        self.available_joint_actions = []
         # if every agent is available, make every action available
         if self.locked_agent == [False] * self.number_of_agents:
-            available_joint_actions = list(self.joint_actions);
+            self.available_joint_actions = list(self.joint_actions);
         else:
             # if not, then see which agents are locked, and only add actions that correspond to the old action
             for action in self.joint_actions:
@@ -1300,36 +1306,40 @@ class JointObservation(object):
                             add_action = False
                             break
                 if add_action:
-                    available_joint_actions.append(action)
+                    self.available_joint_actions.append(action)
 
         # Update Q values.
         # If the state key is not recognized in the state action pairs,
         # then the value of that key is set to the initial value.
         try:
             action_value_dict = self.state_action_pairs[self.new_state_key]
+            # print "action_value_dict: " + str(action_value_dict)
         except KeyError:
             self.state_action_pairs[self.new_state_key] = {}
-            # TODO: in the line below, self.joint_actions should be replaced with available_joint_actions,
-            #       though doing this this results in errors! Why?? This should not be the case!
             for action in self.joint_actions:
                 self.state_action_pairs[self.new_state_key][action] = self.initial_value
-                action_value_dict = self.state_action_pairs[self.new_state_key]
+            # print "Added actions: " + str(self.available_joint_actions)
+            action_value_dict = self.state_action_pairs[self.new_state_key]
+
+        joint_action = -1
 
         # If WoLF is not used, simply choose the epsilon greedy action based on the Q values.
         if (not self.useWoLF):
             # Epsilon greedy algorithm
             if randint(1,100) * 0.01 >= self.epsilon:
                 # Epsilon random action
-                joint_action = random.choice(available_joint_actions)
+                joint_action = random.choice(self.available_joint_actions)
             else:
                 # Greedy action
                 max_val = -1000
-                joint_action = -1
-                for action in available_joint_actions:
-                    value = action_value_dict[action]
+                for action in self.available_joint_actions:
+                    try:
+                        value = action_value_dict[action]
+                    except KeyError:
+                        value = self.initial_value
                     if value > max_val:
                         max_val = value
-                        joint_action = action
+                        self.new_joint_action = action
 
         # If WoLF is used, update an explicit policy and base action on this policy.
         else:
@@ -1337,29 +1347,33 @@ class JointObservation(object):
                 policy_action_probability_dict = self.WoLF_policy[self.new_state_key]
             except KeyError:
                 self.WoLF_policy[self.new_state_key] = {}
-                for action in available_joint_actions:
-                    self.WoLF_policy[self.new_state_key][action] = 1.0/len(available_joint_actions)
-                    policy_action_probability_dict = self.WoLF_policy[self.new_state_key]
+                for action in self.joint_actions:
+                    self.WoLF_policy[self.new_state_key][action] = 1.0/len(self.joint_actions)
+                policy_action_probability_dict = self.WoLF_policy[self.new_state_key]
 
             # Epsilon greedy algorithm
-            if randint(1,100) * 0.01 >= self.epsilon:
+            if randint(1,100) * 0.01 <= self.epsilon:
                 # Epsilon random action
-                joint_action = random.choice(available_joint_actions)
+                joint_action = random.choice(self.available_joint_actions)
             else:
-                # Sample a joint action based on the action probability distribution in the explicit policy.
-                threshold_value = randint(0,999) * 0.001
-                total_value = 0
-                for action in available_joint_actions:
-                    total_value += policy_action_probability_dict[action]
-                    if threshold_value <= total_value:
-                        joint_action = action
+            # Sample a joint action based on the action probability distribution in the explicit policy.
+                threshold_prob = randint(0,999) * 0.001
+                cumulative_prob = 0
+                total_prob = 0.000001  # Use an almost zero value in order to evade divide by zero errors. 
+                                       # Using log-probs would be better, but for now this works fine.
+                for action in self.available_joint_actions:
+                    total_prob += policy_action_probability_dict[action]
+                for action in self.available_joint_actions:
+                    cumulative_prob += (policy_action_probability_dict[action] / total_prob)
+                    # print "THRESHOLD VALUE: " + str(threshold_prob)
+                    # print "TOTAL VALUE: " + str(cumulative_prob)
+                    if threshold_prob <= cumulative_prob:
+                        self.new_joint_action = action
                         break
 
         # update old values
-        print "joint_action: " + str(joint_action)
-        self.new_joint_action = joint_action
         if self.old_joint_action == -1:
-            self.old_joint_action = joint_action
+            self.old_joint_action = self.new_joint_action
         # once a joint action is picked, all agent's actions should be locked.
         self.locked_agent = [True] * self.number_of_agents
 
@@ -1382,65 +1396,95 @@ class JointObservation(object):
         self.reward = reward
 
 
-    def update_policy(self, oldStateKey, newStateKey):
+    def update_policy(self):
         """ Update the Q values (and possibly explicit policy when using WoLF).
         """
 
-        if (self.state_action_pairs[new_state_key][self.new_joint_action] == {}):
-            self.state_action_pairs[new_state_key][self.new_joint_action] = self.initial_value
 
-        # Save the original value of the state-action pair
-        old_val = self.state_action_pairs[old_state_key][self.old_joint_action]
-
-        # Update the new value of the state-action pair
-        new_val = old_val + self.alpha * (self.reward + self.gamma*new_state_val - old_val)
+        # Get the value of the current state-action pair
+        cur_val = self.state_action_pairs[self.new_state_key][self.new_joint_action]
+     
+        # Get the value of the previous state-action pair
+        old_val = self.state_action_pairs[self.old_state_key][self.old_joint_action]
+        
+        # Calculate the new value of the previous state-action pair
+        new_val = old_val + self.alpha * (self.reward + self.gamma*cur_val - old_val)
         
         # Update the value of the state-action pair
-        self.state_action_pairs[oldStateKey][jointAction] = new_val
-
-        # Update the new_state_key and the new_joint_action values.
-        self.old_state_key = self.new_state_key
-        self.old_joint_action = self.new_joint_action
+        self.state_action_pairs[self.old_state_key][self.old_joint_action] = new_val
 
 
         # Update the explicit agent policy when using WoLF
-        if self.useWoLF:
+        if self.useWoLF == True:
 
-            average_policy = 0
+            # Get the actions and probabilities of the WoLF policy for the previous state.
+            prev_q_values = self.state_action_pairs[self.old_state_key]
+            prev_state_policy = self.WoLF_policy[self.old_state_key]
+
+            # Calculate the total probability of all available actions in previous state.
+            # Also create a policy sub-dictionary for all available actions in previous state.
+            available_action_prob_sum = 0
+            prev_state_policy_subdict = {}
+            prev_q_values_subdict = {}
+            for action in self.old_available_joint_actions:
+                prev_q_values_subdict[action] = prev_q_values[action]
+                available_action_prob_sum += prev_state_policy[action]
+                prev_state_policy_subdict[action] = prev_state_policy[action]
+            # Compute average Q-value for all actions for this state
+            # Find the the action yielding the highest Q value for the previous state
             max_action_value = -1
             max_action = -1
-            # Compute average Q-value for all actions for this state
-            # Also find the the action yielding the highest Q value for the current state
-            state_Q_values = self.state_action_pairs[new_state_key]
-            for action, value in state_Q_values.iteritems():
-                average_policy += value
+            for action, value in prev_q_values_subdict.iteritems():
                 if value > max_action_value:
                     max_action = action
                     max_action_value = value
-            average_policy /= len(state_Q_values)  # TODO: Not right yet.. average policy has something to do with the current time step!!
 
+
+            # Compute the average policy
+            average_policy = 0
+            for action, probability in prev_state_policy_subdict.iteritems():
+                average_policy += ((1.0/self.step) * (probability - average_policy))
+
+            #Compute the sum of rewards when following the current policy and when following the average policy. 
             reward_sum_current_policy = 0
             reward_sum_average_policy = 0
-            #Compute the sum of rewards when following the current policy and when following the average policy. 
-            state_policy = self.WoLF_policy[new_state_key]
-            for action, probability in state_policy:
-                reward_sum_current_policy += (probability * state_Q_values[action])
-                reward_sum_average_policy += (average_policy * state_Q_values[action])  # TODO: The correct notion of the average policy should be used here!
+            for action, probability in prev_state_policy_subdict.iteritems():
+                reward_sum_current_policy += (probability * prev_q_values_subdict[action])
+                reward_sum_average_policy += (average_policy * prev_q_values_subdict[action])
 
-            delta = self.deltaWin # TEMPORARY, SHOULD BE REMOVED WITH ACTUAL DELTA DETERMINING
-            # TODO: DETERMINING DELTA SHOULD STILL BE IMPLEMENTED
-            # Determine the value of delta based on performance
-            # if reward_sum_current_policy > reward_sum_average_policy:
-            #     delta = self.deltaWin
-            # else:
-            #     delta = self.deltaLose
+            # Determine the value of delta based on the performance of the two policies
+            if reward_sum_current_policy > reward_sum_average_policy:
+                delta = self.deltaWin
+            else:
+                delta = self.deltaLose
 
-            # Update policy for each state-action pair
-            for action, value in state_Q_values.iteritems():
+            # Compute if the update should be contrainted to keep a correct probability distribution.
+            constrained_update = False
+            for action, probability in prev_state_policy_subdict.iteritems():
                 if action == max_action:
-                    self.WoLF_policy[new_state_key][action] += delta
-                else:
-                    self.WoLF_policy[new_state_key][action] -= delta/(len(state_Q_values)-1)
+                    if (self.WoLF_policy[self.old_state_key][action] + delta) > available_action_prob_sum:
+                        constrained_update = True
+                    break
+
+            # Weight delta based on the probability sum of all available joint actions.
+            weighted_delta = delta * available_action_prob_sum
+
+            # Do a normal update
+            if constrained_update == False:
+                # Update policy for each available state-action pair
+                for action, probability in prev_state_policy_subdict.iteritems():
+                    if action == max_action:
+                        self.WoLF_policy[self.old_state_key][action] += weighted_delta
+                    else:
+                        self.WoLF_policy[self.old_state_key][action] -= (weighted_delta/(len(prev_state_policy_subdict)-1))
+            # Or do a contrained update
+            else:
+                for action, probability in prev_state_policy_subdict.iteritems():
+                    if action == max_action:
+                        self.WoLF_policy[self.old_state_key][action] = available_action_prob_sum
+                    else:
+                        self.WoLF_policy[self.old_state_key][action] = 0
+
 
     def process_joint_observation(self):
         """ Creates an abstract representation of the observation, on which we will learn.
