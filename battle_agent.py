@@ -74,6 +74,13 @@ class Agent(object):
                 Agent.INTEREST_POINTS, matchinfo)
         # self.joint_action = (2,2,6) #random.choice(joint_actions) # Initial random joint action for step 1.
         self.mesh = self.joint_observation.mesh
+        self.sharia_point = []
+        self.haram_point = []
+        for point in self.mesh:
+            if point[0] in (121, 151, 345, 375):
+                self.sharia_point.append(point)
+            if point[0] >= 184 and point[0] <= 312:
+                self.haram_point.append(point)
         self.grid = field_grid
         self.goal = None
         #self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
@@ -152,14 +159,20 @@ class Agent(object):
         # Initialise some handy variables
         goals = [KEEP_GOAL, KEEP_GOAL, KEEP_GOAL]
         assigned = []       
+        alive = []
         ammo_chart = {}
         for agent_id, agent in jo.friends.items():
+            if agent.respawn_in == -1:
+                alive.append(agent_id)
             if agent[3] not in ammo_chart:
                 ammo_chart[agent[3]] = [agent_id]
             else:
                 ammo_chart[agent[3]].append(agent_id)
+        has_one_bullet = []
         have_ammo = [] #join ammo_chart[key] for key > 1
         for agent_id, agent in jo.friends.items():
+            if agent[3]:
+                has_one_bullet.append(agent_id)
             if agent[3] > 1:
                 have_ammo.append(agent_id)
         
@@ -174,8 +187,8 @@ class Agent(object):
             for ammo in ammos:
                 if obj[:2] == ammo["location"]:
                     ammo["timer"] = jo.step - jo.objects[obj][0]
-                    if ammo["timer"] != 0:
-                        ammo["timer"] = max(0, self.settings.ammo_rate - ammo["timer"] + 1)
+                    if ammo["timer"] > 1:
+                        ammo["timer"] = max(0, self.settings.ammo_rate - ammo["timer"])
                     else:
                         ammo["is_present"] = True
                     break
@@ -187,14 +200,67 @@ class Agent(object):
             else:
                 respawn_time = 0
             # Calculate distances
+
+            for agent_id, objective in jo.paths.iteritems():
+                for path in objective.values():
+                    dx = path[0][0][0] - self.obs.loc[0]
+                    dy = path[0][0][1] - self.obs.loc[1]
+                    path_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
+                    current_angle = angle_fix(self.obs.angle + path_angle)
+
+                    for start_node, end_node in zip(path[0], path[0][1:]):
+                        turns_to_turn = math.ceil(path_angle / self.settings.max_turn)
+                        if turns_to_turn:
+                            turns_to_turn -= 1
+                        path = path[0], path[1] + turns_to_turn
+                        dx = start_node[0] - end_node[0]
+                        dy = start_node[1] - end_node[1]
+                        path_angle = angle_fix(math.atan2(dy, dx) - current_angle)
+                        current_angle = angle_fix(current_angle + path_angle)
+                    turns_to_turn = math.ceil(path_angle / self.settings.max_turn)
+                    if turns_to_turn:
+                        turns_to_turn -= 1
+                    path = path[0], path[1] + turns_to_turn
+
             cps[0]["distance"][id] = jo.paths[id]['cp1'][1] + respawn_time
             cps[1]["distance"][id] = jo.paths[id]['cp2'][1] + respawn_time
-            ammos[0]["distance"][id] = jo.paths[id]['am1'][1] + respawn_time
-            ammos[1]["distance"][id] = jo.paths[id]['am2'][1] + respawn_time
+            ammos[0]["distance"][id] = jo.paths[id]['am1'][1] + respawn_time + ammos[0]["timer"]
+            ammos[1]["distance"][id] = jo.paths[id]['am2'][1] + respawn_time + ammos[1]["timer"]
         
         team = int(self.team == TEAM_BLUE)
         controlling_cps = map(lambda cp: cp[2] == team, self.obs.cps)
 
+        if len(alive) != self.number_of_agents:
+            # nearest to cp, to cp
+            # other to ammo
+            cp_dists = map(lambda x: (x[1], x[0], cps[0]), cps[0]["distance"].items())
+            cp_dists += map(lambda x: (x[1], x[0], cps[1]), cps[1]["distance"].items())
+            # Sort the cp distances on the distance per agent.  Each item
+            # is formatted according to (distance, agent_id, cp)
+            cp_dists.sort()
+            chosen_cp = cp_dists[0][2]
+
+            ammo_dists = map(lambda x: (x[1], x[0]), ammos[0]["distance"].items())
+            ammo_dists.sort(key=lambda x: x[1])
+            nearby_ammos = filter(lambda x: x[0] == ammo_dists[0][0], ammo_dists)
+            chosen_ammo_id = nearby_ammos[0][1] #random.choice(nearby_ammos)[1]
+            chosen_ammo = ammos[chosen_ammo_id]
+            if len(alive) == 1 and alive[0] not in has_one_bullet:
+                assigned.append(alive[0]) 
+                jo.goals[assigned[0]] = chosen_ammo["location"]
+                return
+            elif len(alive) == 2:
+                agent_one = cp_dists[0][1]
+                agent_two = cp_dists[1][1]
+                if agent_two in has_one_bullet and agent_one not in has_one_bullet:
+                    agent_one, agent_two = agent_two, agent_one
+                if ((agent_one not in has_one_bullet and agent_two not in has_one_bullet) or
+                        (agent_one in has_one_bullet and agent_two not in has_one_bullet)):
+                    assigned.append(agent_one)
+                    assigned.append(agent_two)
+                    jo.goals[assigned[0]] = chosen_cp["location"]
+                    jo.goals[assigned[1]] = chosen_ammo["location"]
+                    return
         #"""
         if all(controlling_cps):
             danger_zone = min([self.settings.max_range,
@@ -250,6 +316,7 @@ class Agent(object):
                     jo.goals[assigned[1]] = chosen_cp["location"]
                     # Move chosen_agent to the chosen_ammo
                     jo.goals[assigned[0]] = chosen_ammo["location"]
+                    print "Driewerf hoezee!"
                     return
         #"""
 
@@ -450,7 +517,7 @@ class Agent(object):
             path_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
             path_reverse_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle + math.pi)
             speed = 1
-            if self.allow_reverse_gear(path, path_angle, path_reverse_angle):
+            if self.allow_reverse_gear(self.obs.loc, path, path_angle, path_reverse_angle):
                 path_angle = path_reverse_angle
                 speed = -1
             path_dist = (dx**2 + dy**2)**0.5
@@ -471,13 +538,23 @@ class Agent(object):
         return (turn,speed,shoot)
 
 
-    def allow_reverse_gear(self, path, forward_angle, reverse_angle):
+    def allow_reverse_gear(self, loc, path, forward_angle, reverse_angle):
         """ Is it safe/smart to drive backwards?
         """
         # TODO: Find smarter criterion
-        #angle_threshold = 0
-        angle_threshold = 1 * math.pi / 180
-        return abs(reverse_angle) < (abs(forward_angle) + angle_threshold)
+        switch_reverse = False
+        for point in self.sharia_point:
+            dx = point[0] - loc[0]
+            dy = point[1] - loc[1]
+            dist = (dx**2 + dy**2) ** 0.5
+            if dist < 10:
+                switch_reverse = True
+                break
+        switch_reverse = (switch_reverse and path[0] in self.haram_point)
+        reverse_angle_criterion = math.ceil(abs(reverse_angle) / self.settings.max_turn)
+        forward_angle_criterion = math.ceil(abs(forward_angle) / self.settings.max_turn)
+        return ((switch_reverse or not self.obs.ammo) and 
+                reverse_angle_criterion < forward_angle_criterion)
     
     def compute_shoot(self, path_angle):
         """This function returns shoot and turn actions for the agent
@@ -669,8 +746,12 @@ class Agent(object):
                 if len(foe_path[foe]) < 3:
                     dangerous_foe.append(foe)
         for foe in set(dict(nearest_foes).keys()).union(dangerous_foe):
-            dx = foe[0] - self.obs.loc[0]
-            dy = foe[1] - self.obs.loc[1]
+            try:
+                dx = foe_path[foe][-2][0] - self.obs.loc[0]
+                dy = foe_path[foe][-2][1] - self.obs.loc[1]
+            except IndexError:
+                dx = foe[0] - self.obs.loc[0]
+                dy = foe[1] - self.obs.loc[1]
             foe_angle = math.atan2(dy, dx)
             req_turn_foe = angle_fix(foe_angle - self.obs.angle)
             
@@ -690,18 +771,36 @@ class Agent(object):
             active, and it will only be called for the active team.
         """
         import pygame
+        font = pygame.font.SysFont("Comic Sans MS", 10)
         # First agent clears the screen
         if self.id == 0:
             surface.fill((0,0,0,0))    
-        
+            """
+            for start in self.mesh:
+                for end in self.mesh[start]:
+                    pygame.draw.line(surface, (120, 91, 169), start, end, 1)
+            """
+            for start in self.mesh:
+                pygame.draw.circle(surface, (255, 128, 0), start, 3)
+                if start in self.sharia_point:
+                    pygame.draw.circle(surface, (169, 32, 62), start, 3)
+                if start in self.haram_point:
+                    pygame.draw.circle(surface, (236, 242, 69), start, 3)
+                label = font.render(str(start), True, (0,0,0))
+                label_pos = (start[0], start[1] + 5)
+                #surface.blit(label, label_pos)
+
         # Draw a red, green and blue dot on agent 1, 2, and 3.
         color = ((200,0,0), (0,200,0), (0,0,200))
         agent_color = color[self.id % len(color)]
         pygame.draw.circle(surface, agent_color, self.obs.loc, 1)
+        diff = self.settings.max_see
+        rect = pygame.Rect(self.obs.loc[0] - diff, self.obs.loc[1] - diff, 2 *
+                diff, 2 * diff)
+        pygame.draw.rect(surface, agent_color, rect, 1)
 
         # Write a small ammo count near the agent
-        font = pygame.font.SysFont("monospace", 10)
-        label = font.render(str(self.obs.ammo), True, agent_color)
+        label = font.render(str(self.obs.ammo), True, (0,0,0))
         label_pos = (self.obs.loc[0], self.obs.loc[1] + 5)
         surface.blit(label, label_pos)
 
@@ -771,6 +870,28 @@ def transform_mesh(nav_mesh, interest_points, grid, tilesize, max_speed=40, max_
         for end in nav_mesh:
             if not line_intersects_grid(start, end, grid, tilesize):
                 full_mesh[start][end] = calc_cost(start, end)
+
+    ridiculous_lines = {
+            (57, 89): [(232, 56)],
+            (87, 89): [(232, 56), (184, 168)],
+            (57, 183): [(264, 216), (184, 168), (295, 151), (201, 151), (121,
+                169)],
+            (87, 183): [(295, 151)],
+            (439, 183): [(264, 216)],
+            (409, 183): [(264, 216)],
+            (409, 89): [(312, 104), (201, 121)],
+            (439, 89): [(232, 56), (312, 104), (201, 121), (295, 121), (375,
+                103)]}
+    for start in ridiculous_lines:
+        for end in ridiculous_lines[start]:
+            try:
+                del full_mesh[start][end]
+            except KeyError:
+                pass
+            try:
+                del full_mesh[end][start]
+            except KeyError:
+                pass
     
     # Add in angles and calculate new cost for transitions
     #new_mesh = {}
@@ -1307,14 +1428,13 @@ class JointObservation(object):
             try:
                 scores = self.game_histories[self.match_id][tuple(self.action_log)]
                 imperfection_score = sum(map(lambda score: imperfection_coefficient(score), scores))
-                print "%s scores, %2.5f" % (len(scores), imperfection_score /
-                        len(scores))
+                #print "%s scores, %2.5f" % (len(scores), imperfection_score /
+                #        len(scores))
                 if len(scores) > HISTORIC_THRESHOLD and imperfection_score / len(scores) > 0.5:
                     self.random_action_agent = random.randint(0, self.number_of_agents)
-                    print "%s will act randomly" % self.random_action_agent
+                    #print "%s will act randomly" % self.random_action_agent
                     return self.deja_vu(agent_id)
             except KeyError:
-                print "new action log!"
                 pass
         return False
 

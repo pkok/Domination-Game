@@ -20,6 +20,28 @@ AGENT_NAMES = {TEAM_RED: ["Megatron", "Starscream", "Blitzwing"],
 TEAM_NAMES = ["DECEPTICON", "AUTOBOT"]
 
 
+MAP_DRAWING = """
+w w w w w w w w w w w w w w w w w w w w w w w w w w w w w w w
+w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
+w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
+w _ _ _ _ _ _ _ _ _ _ _ _ _ C _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
+w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
+w _ _ _ _ _ _ _ w w w w w w w w w w w w w w w _ _ _ _ _ _ _ w
+w _ _ _ w _ _ _ w _ _ _ _ _ _ _ _ _ _ A _ _ _ _ _ _ w _ _ _ w
+w R _ _ w _ _ _ w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w _ _ B w
+w R _ _ w _ _ _ w _ _ _ _ w w w w w _ _ _ _ w _ _ _ w _ _ B w
+w R _ _ w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w _ _ _ w _ _ B w
+w _ _ _ w _ _ _ _ _ _ A _ _ _ _ _ _ _ _ _ _ w _ _ _ w _ _ _ w
+w _ _ _ _ _ _ _ w w w w w w w w w w w w w w w _ _ _ _ _ _ _ w
+w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
+w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ C _ _ _ _ _ _ _ _ _ _ _ _ _ w
+w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
+w _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ w
+w w w w w w w w w w w w w w w w w w w w w w w w w w w w w w w
+"""
+
+
+
 class Agent(object):
 
     NAME = "Dalek Thay"
@@ -726,6 +748,26 @@ def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
         return dist + angle2_dist
     else:
         return dist + (angle1_dist - 1.0) + angle2_dist    
+
+
+def find_path_recursively(start, angle, ends, mesh, grid, waypoints=[]):
+    """ Uses astar to find a path from start to each point in end, with optional waypoints in between
+        using the given mesh and tile grid.
+    """ 
+    path_dict = {}
+    for end in ends:
+        end_point = ()
+        if type(ends) is dict:
+            end_point = ends[end]
+        else:
+            end_point = end
+        path = [start]
+        for pt in waypoints:
+            path = path + find_single_path(path[-1], angle, pt, mesh, grid)
+        del path[0]
+        path_dict[end] = path + find_single_path(path[-1], angle, end_point, mesh, grid)
+    return path_dict
+
 
 def find_single_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
     """ Uses astar to find a path from start to end,
