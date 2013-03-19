@@ -429,7 +429,7 @@ class Agent(object):
     def allow_reverse_gear(self, path, forward_angle, reverse_angle):
         """ Is it safe/smart to drive backwards?
         """
-        return abs(reverse_angle) < abs(forward_angle)
+        return False #abs(reverse_angle) < abs(forward_angle)
     
     def compute_shoot(self, path_angle):
         """This function returns shoot and turn actions for the agent
@@ -656,7 +656,6 @@ class Agent(object):
             """
             # Draw line to goal along the planned path
 
-                                
             if self.goal is not None:
                 for ip in Agent.INTEREST_POINTS:
                     if self.goal == Agent.INTEREST_POINTS[ip]:
