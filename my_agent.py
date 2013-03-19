@@ -447,35 +447,55 @@ class Agent(object):
         # Instantiate goal for agent 0
         self.goal = goals[self.id]
     
-	def find_detour(self, agent_id)
-		""" This function is used to calculate the paths to all interestpoints 
-			for a certain agent while including waypoints to enemies in it's path
-		"""
-		# get all known enemy positions and the estimation from the Particle Filter
-		enemy_pos = self.get_enemy_pos( (0, 0), (460, 260) )
-		enemy_locs = []
-		for enemy in enemy_pos:
-			if enemy != []:
-				enemy_locs.append(enemy[0][1])
-		
-		# calculate each path to the enemies		
-		enemy_paths = self.find_path_recursively( self.obs.loc, self.obs.angle, enemy_locs, self.mesh, self.grid)
-		enemy_dist = []
-		for path in enemy_paths.values():
-			enemy_dist.append(len(path))
-		
-		# select the shortest path to an enemy
-		min_dist, closest_enemy = 10000.0, ()
-		for i in range(len(enemy_dist)):
-			if enemy_dist[i] < min_dist:
-				min_dist = enemy_dist[i]
-				closest_enemy = enemy
-		
-		# return the path to the selected goal with a waypoint to the enemy along the way
-		return self.find_path_recursively( self.obs.loc, self.obs.angle, self.INTEREST_POINTS, self.mesh, self.grid, [closest_enemy])
-		
-		
-		
+
+    def find_path_recursively(self, start, angle, ends, mesh, grid, waypoints=[]):
+        """ Uses astar to find a path from start to each point in end, with optional waypoints in between
+            using the given mesh and tile grid.
+        """ 
+        path_dict = {}
+        for end in ends:
+            end_point = ()
+            if type(ends) is dict:
+                end_point = ends[end]
+            else:
+                end_point = end
+            path = [start]
+            for pt in waypoints:
+                path = path + find_single_path(path[-1], angle, pt, mesh, grid)
+            del path[0]
+            path_dict[end] = path + find_single_path(path[-1], angle, end_point, mesh, grid)
+        return path_dict
+
+
+    def find_detour(self, agent_id):
+        """ This function is used to calculate the paths to all interestpoints 
+            for a certain agent while including waypoints to enemies in it's path
+        """
+        # get all known enemy positions and the estimation from the Particle Filter
+        enemy_pos = self.get_enemy_pos( (0, 0), (460, 260) )
+        enemy_locs = []
+        for enemy in enemy_pos:
+            if enemy != []:
+                enemy_locs.append(enemy[0][1])
+        
+        # calculate each path to the enemies        
+        enemy_paths = self.find_path_recursively(self.obs.loc, self.obs.angle, enemy_locs, self.mesh, self.grid)
+        enemy_dist = []
+        for path in enemy_paths.values():
+            enemy_dist.append(len(path))
+        
+        # select the shortest path to an enemy
+        min_dist, closest_enemy = 10000.0, ()
+        for i in range(len(enemy_dist)):
+            if enemy_dist[i] < min_dist:
+                min_dist = enemy_dist[i]
+                closest_enemy = enemy
+        
+        # return the path to the selected goal with a waypoint to the enemy along the way
+        return self.find_path_recursively(self.obs.loc, self.obs.angle, self.INTEREST_POINTS, self.mesh, self.grid, [closest_enemy])
+        
+        
+        
     def get_enemy_pos(self, topleft, bottomright):
         """ This function uses the observation to pinpoint enemy positions 
             if it cannot then it will use the particle filter information to
@@ -875,6 +895,7 @@ def transform_mesh(nav_mesh, interest_points, grid, tilesize, max_speed=40, max_
     
     return full_mesh
 
+
 def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
     #Calculate the turns necessary to travel from node1 to node2
  
@@ -905,23 +926,6 @@ def calc_cost(node1, node2,  max_speed=40, max_angle=math.pi/4):
     else:
         return dist + (angle1_dist - 1.0) + angle2_dist    
 
-def find_path_recursively(start, angle, ends, mesh, grid, waypoints=[]):
-    """ Uses astar to find a path from start to each point in end, with optional waypoints in between
-        using the given mesh and tile grid.
-    """ 
-    path_dict = {}
-    for end in ends:
-		end_point = ()
-		if type(ends) is dict:
-			end_point = ends[end]
-		else:
-			end_point = end
-        path = [start]
-        for pt in waypoints:
-            path = path + self.find_single_path(path[-1], angle, pt, mesh, grid)
-		del path[0]
-        path_dict[end] = path + self.find_single_path(path[-1], angle, end_point, mesh, grid)
-    return path_dict
         
 def find_single_path(start, angle, end, mesh, grid, max_speed=40, max_angle=math.pi/4, tilesize=16):
     """ Uses astar to find a path from start to end,
