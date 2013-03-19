@@ -70,7 +70,7 @@ class Tournament2(scenarios.Scenario):
     SETTINGS  = core.Settings(max_steps=300,
                               max_score=100,
                               spawn_time=11,
-                              ammo_amount=1,  
+                              ammo_amount=2,  
                               ammo_rate=9,
                               max_range=60,
                               max_see=80,

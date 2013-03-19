@@ -19,15 +19,15 @@ import cPickle as pickle
 from domination.utilities import point_dist, line_intersects_grid, angle_fix
 
 # Visualization
-DRAW = True
-DRAW_MESH = True
-DRAW_HEATMAP = True
-DRAW_HYPOTHESES = True
-DRAW_FOW = True
-DRAW_GOAL = True
+DRAW = False
+DRAW_MESH = False
+DRAW_HEATMAP = False
+DRAW_HYPOTHESES = False
+DRAW_FOW = False
+DRAW_GOAL = False
 PRINT_RANKINGS = True
-FRAME_BY_FRAME = True
-DRAW_AMMO = True
+FRAME_BY_FRAME = False
+DRAW_AMMO = False
 MULTI_TANK_OBJECTIVE = True
 COORDINATION_GRAPH = True
 MAMDP = True
@@ -499,7 +499,14 @@ class General():
                             for a in involved_agents]
         targetable_foes = list(self.targetable_foes)
         all_foes = self.foes
-        cost_dict = {a: {f: 100 for f in targetable_foes} for a in agent_locs}
+        #cost_dict = {a: {f: 100 for f in targetable_foes} for a in agent_locs}
+        cost_dict = {}
+        for a in agent_locs:
+            value = {}
+            for f in targetable_foes:
+                value[f] = 100
+            cost_dict[a] = value
+
         for i, foe_loc in enumerate(targetable_foes):
             foe_friends = [f for f in all_foes if foe_loc != f]
             vt = get_vsbl_targets(foe_loc, agent_locs, foe_friends, corners,
@@ -617,7 +624,7 @@ class General():
                                              for (k, v) in items)
 
 class Agent(object):
-    NAME = "All your cp"
+    NAME = "ALL YOUR CP"
 
     def __init__(self, id, team, settings=None, field_rects=None,
                  field_grid=None, nav_mesh=None, blob=None, **kwargs):
