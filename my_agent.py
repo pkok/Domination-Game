@@ -1177,7 +1177,6 @@ class JointObservation(object):
         # Perform Monte Carlo localisation
         if agent_id == (self.number_of_agents - 1):
             self.MC_localisation()
-
     def update_action(self, agent_id, action_tuple):
         """ Register the chosen action of agents.  This information can be
             retrieved through methods such as:
