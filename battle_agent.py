@@ -34,10 +34,19 @@ random.shuffle(possible_names)
 
 possible_names = map(lambda x: "Agent " + x, "012012")
 
-AGENT_NAMES = {TEAM_RED: possible_names[:3], 
-        TEAM_BLUE: possible_names[3:6]}
-TEAM_NAMES = ["DECEPTICON", "AUTOBOT"]
+AGENT_NAMES = {TEAM_RED: ["Alexandra", "Elizabeth", "Omaima"],
+        TEAM_BLUE: ["Hank", "Filmore", "Rudy"]}
+TEAM_NAMES = ["Heroins", "Legends"]
 
+PHRASES = ["Agent {0} may or may not be on a killing spree.", 
+    "{0} notices you look pretty fine today.",
+    "{0} is getting angry. You don't like {0} when angry.",
+    '{0}: "How YOU doin\'?"',
+    "{0} feels like a true god.",
+    "Why can't we have peace, {0} is thinking.",
+    "{0}, I choose you!",
+    "Oh yeah, {0} is on fire!"
+    ]
 USE_SARSA = False
 
 # Need at least so many games against this opponent to pick a random action
@@ -45,7 +54,7 @@ HISTORIC_THRESHOLD = 5
 
 class Agent(object):
 
-    NAME = "Toonies"
+    NAME = "tanks_everywhere"
     RADIUS = 6.0 # Radius in pixels of an agent.
     INTEREST_POINTS = {'cp1':(232, 56), 'cp2':(264, 216), 'am1':(184,168), 'am2':(312,104)}
     
@@ -58,8 +67,6 @@ class Agent(object):
         
         self.id = named_int(AGENT_NAMES[team], id)
         self.team = named_int(TEAM_NAMES, team)
-        self.id = id
-        self.team = team
         self.settings = settings
         # self.state_action_pairs = defaultdict(lambda: [None, 10])
         self.epsilon = 0.05
@@ -128,6 +135,9 @@ class Agent(object):
             self.set_goal_hardcoded()
             if self.joint_observation.goals[self.id] != KEEP_GOAL:
                 self.goal = self.joint_observation.goals[self.id]
+
+        # room for fun
+        random_shoutout(self.id)
         
         # Compute and return the corresponding action
         action = self.get_action(randomize=self.joint_observation.deja_vu(self.id))
@@ -193,12 +203,15 @@ class Agent(object):
                         ammo["is_present"] = True
                     break
 
+        remove_these_keys = []
         for agent_id in jo.castling:
             dx = jo.friends[agent_id][0] - jo.castling[agent_id][0]
             dy = jo.friends[agent_id][1] - jo.castling[agent_id][1]
             distance = (dx**2 + dy**2) ** 0.5
             if distance < Agent.RADIUS:
-                del jo.castling[agent_id]
+                remove_these_keys.append(agent_id)
+        for agent_id in remove_these_keys:
+            del jo.castling[agent_id]
 
         for id in sorted(jo.friends):
             # Add respawn timer to distance calculation
@@ -269,7 +282,12 @@ class Agent(object):
                     jo.goals[assigned[1]] = chosen_ammo["location"]
                     return
         #"""
-        if all(controlling_cps) and not self.castling:
+        if jo.castling and all(controlling_cps):
+            # Follow the policy for switching between CP and ammo spot as long
+            # as it is safe
+            return
+
+        if all(controlling_cps):
             danger_zone = min([self.settings.max_range,
                 self.settings.max_speed])
             def cp_under_pressure(cp):
@@ -323,7 +341,7 @@ class Agent(object):
                     jo.goals[assigned[1]] = chosen_cp["location"]
                     # Move chosen_agent to the chosen_ammo
                     jo.goals[assigned[0]] = chosen_ammo["location"]
-                    print "Driewerf hoezee!"
+                    #print "Driewerf hoezee!"
                     jo.castling = {}
                     for agent_id in assigned:
                         jo.castling[agent_id] = jo.goals[agent_id]
@@ -1198,6 +1216,7 @@ class JointObservation(object):
         self.gamma = gamma
         self.alpha = alpha
         self.initial_value = initial_value
+        self.castling = {}
         self.number_of_agents = number_of_agents
 
         self.state = -1
@@ -1704,3 +1723,7 @@ def imperfection_coefficient(score):
     else:
         mid_score = 0.5 * (score[0] + score[1])
     return math.sqrt(2*mid_score - score[0]) / math.sqrt(mid_score)
+
+def random_shoutout(agent_id):
+    if random.random() < 0.05:
+        print random.choice(PHRASES).format(str(agent_id))
