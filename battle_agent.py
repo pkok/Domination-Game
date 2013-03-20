@@ -17,23 +17,6 @@ TEAM_NEUTRAL = 2
 
 KEEP_GOAL = (-1, -1)
 
-possible_names = [
-    "Blossom", "Buttercup", "Bubbles", # Powerpuff girls
-    "Brick", "Boomer", "Butch", # Rowdyruff boys 
-    "Charmander", "Squirtle", "Bulbasaur", # Original 3 starter Pokemon
-    "Huey", "Dewey", "Louie", # Donald Duck's nephews
-    "Speedy Cerviche", "Polly Esther", "Guido Anchovy", # Samurai Pizza Cats
-    "Melchior", "Caspar", "Balthazar", # Three Magi
-    "Pater", "Filius", "Spiritus Sanctus", # Christian Trinity
-    "Belgium", "The Netherlands", "Luxembourg", # The BeNeLux
-    "Red", "Green", "Blue", # Colors!
-    "Hue", "Saturation", "Intensity", # Other colorspace!
-    "x", "y", "z", # Math
-]
-random.shuffle(possible_names)
-
-possible_names = map(lambda x: "Agent " + x, "012012")
-
 AGENT_NAMES = {TEAM_RED: ["Alexandra", "Elizabeth", "Omaima"],
         TEAM_BLUE: ["Hank", "Filmore", "Rudy"]}
 TEAM_NAMES = ["Heroins", "Legends"]
