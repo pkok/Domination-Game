@@ -193,6 +193,13 @@ class Agent(object):
                         ammo["is_present"] = True
                     break
 
+        for agent_id in jo.castling:
+            dx = jo.friends[agent_id][0] - jo.castling[agent_id][0]
+            dy = jo.friends[agent_id][1] - jo.castling[agent_id][1]
+            distance = (dx**2 + dy**2) ** 0.5
+            if distance < Agent.RADIUS:
+                del jo.castling[agent_id]
+
         for id in sorted(jo.friends):
             # Add respawn timer to distance calculation
             if jo.respawn_in[id] > 0:
@@ -262,7 +269,7 @@ class Agent(object):
                     jo.goals[assigned[1]] = chosen_ammo["location"]
                     return
         #"""
-        if all(controlling_cps):
+        if all(controlling_cps) and not self.castling:
             danger_zone = min([self.settings.max_range,
                 self.settings.max_speed])
             def cp_under_pressure(cp):
@@ -317,6 +324,9 @@ class Agent(object):
                     # Move chosen_agent to the chosen_ammo
                     jo.goals[assigned[0]] = chosen_ammo["location"]
                     print "Driewerf hoezee!"
+                    jo.castling = {}
+                    for agent_id in assigned:
+                        jo.castling[agent_id] = jo.goals[agent_id]
                     return
         #"""
 
