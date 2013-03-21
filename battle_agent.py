@@ -82,7 +82,8 @@ class Agent(object):
         # Read the binary blob, we're not using it though
         if not self.joint_observation.state_action_pairs and blob is not None:
             # Remember the blob path so we can write back to it
-            self.blobpath = blob.name
+            if hasattr(blob, 'name'):
+                self.blobpath = blob.name
             data = pickle.loads(blob.read())
             self.joint_observation.process_blob_data(data)
             print "%s received binary blob of %s" % (
@@ -1193,7 +1194,10 @@ class JointObservation(object):
         self.team = team        
         self.grid = grid
         self.mesh = transform_mesh(nav_mesh, interest_pts, grid, settings.tilesize, settings.max_speed, settings.max_turn)
-        self.match_id = matchinfo.match_id
+        if matchinfo:
+            self.match_id = matchinfo.match_id
+        else:
+            self.match_id = random.random()
         self.state_action_pairs = {}
         self.epsilon = epsilon
         self.gamma = gamma
