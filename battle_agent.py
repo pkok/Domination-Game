@@ -14,6 +14,7 @@ astar = astar.astar
 TEAM_RED = 0
 TEAM_BLUE = 1
 TEAM_NEUTRAL = 2
+OWN_TEAM = TEAM_NEUTRAL
 
 KEEP_GOAL = (-1, -1)
 
@@ -48,8 +49,10 @@ class Agent(object):
             given for each game.
         """
         
-        self.id = named_int(AGENT_NAMES[team], id)
-        self.team = named_int(TEAM_NAMES, team)
+        self.id = id#named_int(AGENT_NAMES[team], id)
+        self.team = team#named_int(TEAM_NAMES, team)
+        global OWN_TEAM
+        OWN_TEAM = team
         self.settings = settings
         # self.state_action_pairs = defaultdict(lambda: [None, 10])
         self.epsilon = 0.05
@@ -1713,4 +1716,5 @@ def imperfection_coefficient(score):
 
 def random_shoutout(agent_id):
     if random.random() < 0.05:
-        print random.choice(PHRASES).format(str(agent_id))
+        name = random.choice(AGENT_NAMES[OWN_TEAM])
+        print random.choice(PHRASES).format(name)
