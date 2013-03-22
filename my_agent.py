@@ -9,6 +9,12 @@ import cPickle as pickle
 from domination.libs import astar
 astar = astar.astar
 
+DRAW_MESH_POINTS = True
+DRAW_MESH_POINT_COORDS = True
+DRAW_AGENT_DOT = True
+DRAW_AGENT_VIEW = True
+DRAW_AGENT_AMMO = True
+DRAW_AGENT_GOAL = True
 
 class Agent(object):
 
@@ -39,6 +45,13 @@ class Agent(object):
         self.number_of_agents = 3
         self.joint_observation = JointObservation(settings, field_grid, team, nav_mesh, self.epsilon, self.gamma, self.alpha, self.deltaWin, self.deltaLose, self.useWoLF, self.initial_value, self.number_of_agents, Agent.INTEREST_POINTS)
         self.mesh = self.joint_observation.mesh
+        self.sharia_point = []
+        self.haram_point = []
+        for point in self.mesh:
+            if point[0] in (121, 151, 345, 375):
+                self.sharia_point.append(point)
+            if point[0] >= 184 and point[0] <= 312:
+                self.haram_point.append(point)
         self.grid = field_grid
         self.goal = None
         #self.callsign = '%s-%d'% (('BLU' if team == TEAM_BLUE else 'RED'), id)
@@ -403,7 +416,7 @@ class Agent(object):
             path_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle)
             path_reverse_angle = angle_fix(math.atan2(dy, dx) - self.obs.angle + math.pi)
             speed = 1
-            if self.allow_reverse_gear(path, path_angle, path_reverse_angle):
+            if self.allow_reverse_gear(self.obs.loc, path, path_angle, path_reverse_angle):
                 path_angle = path_reverse_angle
                 speed = -1
             path_dist = (dx**2 + dy**2)**0.5
@@ -426,9 +439,22 @@ class Agent(object):
         return (turn,speed,shoot)
 
 
-    def allow_reverse_gear(self, path, forward_angle, reverse_angle):
+    def allow_reverse_gear(self, loc, path, forward_angle, reverse_angle):
         """ Is it safe/smart to drive backwards?
         """
+        switch_reverse = False
+        for point in self.sharia_point:
+            dx = point[0] - loc[0]
+            dy = point[1] - loc[1]
+            dist = (dx**2 + dy**2) ** 0.5
+            if dist < 10:
+                switch_reverse = True
+                break
+        switch_reverse = switch_reverse and path[0] in self.haram_point
+        reverse_angle_criterion = math.ceil(abs(reverse_angle) / self.settings.max_turn)
+        forward_angle_criterion = math.ceil(abs(forward_angle) / self.settings.max_turn)
+        return ((switch_reverse or not self.obs.ammo) and
+                reverse_angle_criterion < forward_angle_criterion)
         return abs(reverse_angle) < abs(forward_angle)
     
     def compute_shoot(self, path_angle):
@@ -643,34 +669,66 @@ class Agent(object):
         """
         import pygame
         # First agent clears the screen
+        font = pygame.font.SysFont("monospace", 10)
         if self.id == 0:
             surface.fill((0,0,0,0))    
+
+            if DRAW_MESH_POINTS:
+                for point in self.mesh:
+                    if point in self.sharia_point:
+                        pygame.draw.circle(surface, (169, 32, 62), point, 3)
+                    elif point in self.haram_point:
+                        pygame.draw.circle(surface, (236, 242, 69), point, 3)
+                    else:
+                        pygame.draw.circle(surface, (255, 128, 0), point, 3)
+                    if DRAW_MESH_POINT_COORDS:
+                        label = font.render(str(point), True, (0,0,0))
+                        label_pos = (point[0] - label.get_width()/2., point[1] + 5)
+                        #surface.blit(label, label_pos)
         
-        color = ((255,0,0), (0,255,0), (0,0,255))
-        pygame.draw.circle(surface, color[self.id % len(color)], self.obs.loc, 1)
+        # Details of agents are drawn in their respective colors:
+        #     Agent 0 = red
+        #     Agent 1 = green
+        #     Agent 2 = blue
+        # Each agent has a dot on top to mark it with its own color
+        color = ((200, 0, 0), (0, 200, 0), (0, 0, 200))
+        agent_color = color[self.id % len(color)]
+        if DRAW_AGENT_DOT or self.selected:
+            pygame.draw.circle(surface, agent_color, self.obs.loc, 1)
+        # This section draws its viewing range
+        if DRAW_AGENT_VIEW or self.selected:
+            view_range = self.settings.max_see
+            rect = pygame.Rect(self.obs.loc[0] - view_range, 
+                    self.obs.loc[1] - view_range, 
+                    2 * view_range, 
+                    2 * view_range)
+            pygame.draw.rect(surface, agent_color, rect, 1)
+        if DRAW_AGENT_AMMO or self.selected:
+            # Write a small ammo counter south of the agent (in black for readability)
+            label = font.render(str(self.obs.ammo), True, (0, 0, 0))
+            label_pos = (self.obs.loc[0] - label.get_width()/2., self.obs.loc[1] + 5)
+            surface.blit(label, label_pos)
+
+        # Draw line to goal along the planned path
+        if self.goal is not None and (DRAW_AGENT_GOAL or self.selected):
+            path = None
+            for ip in Agent.INTEREST_POINTS:
+                if self.goal == Agent.INTEREST_POINTS[ip]:
+                    path = self.joint_observation.paths[self.id][ip][0]
+            if path is None:
+                # Compute path and angle to path
+                path = find_single_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
+                                    self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
+            if path:
+                for i in range(len(path)):
+                    if i == 0:
+                        pygame.draw.line(surface, agent_color, self.obs.loc, path[i][0:2])
+                    else:
+                        pygame.draw.line(surface, agent_color, path[i-1][0:2], path[i][0:2])
+
         # Selected agents draw their info
         if self.selected:
-            # Draw line directly to goal
-            """if self.goal is not None:
-                pygame.draw.line(surface,(0,0,0),self.obs.loc, self.goal)
-            """
-            # Draw line to goal along the planned path
-
-                                
-            if self.goal is not None:
-                for ip in Agent.INTEREST_POINTS:
-                    if self.goal == Agent.INTEREST_POINTS[ip]:
-                        path = self.joint_observation.paths[self.id][ip][0]
-                if path is None:
-                    # Compute path and angle to path
-                    path = find_single_path(self.obs.loc, self.obs.angle, self.goal, self.mesh, self.grid,
-                                        self.settings.max_speed, self.settings.max_turn, self.settings.tilesize)
-                if path:
-                    for i in range(len(path)):
-                        if i == 0:
-                            pygame.draw.line(surface,(0,0,0),self.obs.loc, path[i][0:2])
-                        else:
-                            pygame.draw.line(surface,(0,0,0),path[i-1][0:2], path[i][0:2])
+            pass
     
     def finalize(self, interrupted=False):
         """ This function is called after the game ends, 
@@ -715,6 +773,28 @@ def transform_mesh(nav_mesh, interest_points, grid, tilesize, max_speed=40, max_
             if not line_intersects_grid(start, end, grid, tilesize):
                 full_mesh[start][end] = calc_cost(start, end)
     
+    ridiculous_lines = {
+            (57, 89): [(232, 56)],
+            (87, 89): [(232, 56), (184, 168)],
+            (57, 183): [(264, 216), (184, 168), (295, 151), (201, 151), (121,
+                169)],
+            (87, 183): [(295, 151)],
+            (439, 183): [(264, 216)],
+            (409, 183): [(264, 216)],
+            (409, 89): [(312, 104), (201, 121)],
+            (439, 89): [(232, 56), (312, 104), (201, 121), (295, 121), (375,
+                103)]}
+    for start in ridiculous_lines:
+        for end in ridiculous_lines[start]:
+            try:
+                del full_mesh[start][end]
+            except KeyError:
+                pass
+            try:
+                del full_mesh[end][start]
+            except KeyError:
+                pass
+
     # Add in angles and calculate new cost for transitions
     #new_mesh = {}
     #angles = list(frange(-math.pi, math.pi, max_angle*(8/4.0)))
