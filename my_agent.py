@@ -1170,6 +1170,7 @@ class JointObservation(object):
         
         # Monte Carlo localisation to track enemy positions
         self.mc_count = 1000
+        self.foe_ids = {} # {id1:loc1, ...}
         self.mc_points = self.init_MC_points() # [[loc1,loc2,loc3...], ...]
         self.mc_probs = self.init_MC_probs() # [{tile1 : prob1, tile2 : prob2, ...}, ...]
 
@@ -1561,7 +1562,6 @@ class JointObservation(object):
         mc_probs = []
         tile_dict = {}
         
-        #walls = [(64,96),(64,112)]
         for x in range(16,480,16):
             for y in range(16,272,16):
                 tile_dict[(x,y)] = 0.0
@@ -1571,20 +1571,117 @@ class JointObservation(object):
     def MC_localisation(self):
         """Perform Monte Carlo localisation
         """
-        #for tile in self.mc_probs[0]:
-        #    print (tile, self.mc_probs[0][tile])
-        for id in range(len(self.mc_points)):
-           print len(self.mc_points[id])
-        print '\r\n'
+        #print self.foe_ids
+        #for id in range(len(self.mc_points)):
+        #    print len(self.mc_points[id])
+        
+        # Calculate which foes are observed
+        foes_gone = self.update_foe_ids()
         
         # Update MC points
-        if not self.step == 1:
-            for id in range(self.number_of_agents):
+        for id in range(self.number_of_agents):
+            # If foe is observed, store a single MC point
+            if id in self.foe_ids:
+                self.mc_points[id] = [self.foe_ids[id]]
+            # If foe is just gone, initialise MC points at previous location
+            elif id in foes_gone:
+                if self.check_vision(foes_gone[id]):
+                    self.mc_points[id] = self.init_MC_points_single(self.enemy_spawn_pos[id])
+                else:
+                    self.mc_points[id] = self.init_MC_points_single(foes_gone[id])
+            # If foe is still not observed, spread around the MC points
+            else:
                 self.mc_points[id] = self.update_MC_points(id)
-            
+        
         # Update tile probabilities
         for id in range(self.number_of_agents):
             self.mc_probs[id] = self.update_MC_probs(id)
+    
+    def update_foe_ids(self):
+        """Updates the ids of observed foes
+        """
+        new_foe_ids = {}
+        
+        # Get positions of foes at current timestep
+        foes_new = list(self.foes[self.step])
+        
+        # If no foes observed at new timestep, return empty dictionary
+        if len(foes_new) == 0:
+            pass
+        
+        # If same number of foes is observed, assume these are the same foes
+        elif len(foes_new) == len(self.foe_ids):
+            count = 0
+            for id in self.foe_ids:
+                new_foe_ids[id] = foes_new[count][0:2]
+                count += 1
+        
+        # If more foes are observed, assume the same foes are present, and more
+        elif len(foes_new) > len(self.foe_ids):
+
+            # For each old foe calculate the closest new foe
+            assigned = []
+            for foe_old in self.foe_ids:
+                min_dist = float('inf')
+                min_id = -1
+                foe_old_loc = self.foe_ids[foe_old]
+                
+                for foe_new in foes_new:
+                    if not foe_new in assigned:
+                        dist = point_dist(foe_old_loc, foe_new[0:2])
+                        if dist < min_dist:
+                            min_dist = dist
+                            min_id = foe_new
+                assigned.append(min_id)
+                new_foe_ids[foe_old] = min_id[0:2]
+            
+            # Get the list of foes that were not observed before
+            foes_really_new = []
+            for foe in foes_new:
+                if not foe in assigned:
+                    foes_really_new.append(foe)
+            
+            # For each new foe that was not observed before, calculate the appropriate id
+            assigned_new = []
+            for foe in foes_really_new:
+                tile = self.get_tile_coords(foe[0:2])
+                max_prob = -1.0
+                max_id = -1
+                
+                for id in range(len(self.mc_probs)):
+                    if (not id in self.foe_ids) and (not id in assigned_new):
+                        prob = self.mc_probs[id][tile]
+                        if prob > max_prob:
+                            max_prob = prob
+                            max_id = id
+                new_foe_ids[max_id] = foe[0:2]
+                assigned_new.append(max_id)
+            
+        # If fewer foes are observed, compute which agent is gone
+        else:
+            # For each new foe calculate the closest old foe
+            assigned = []
+            for foe_new in foes_new:
+                min_dist = float('inf')
+                min_id = -1
+                for foe_old in self.foe_ids:
+                    if not foe_old in assigned:
+                        dist = point_dist(foe_new[0:2], self.foe_ids[foe_old])
+                        if dist < min_dist:
+                            min_dist = dist
+                            min_id = foe_old
+                assigned.append(min_id)
+                new_foe_ids[min_id] = foe_new[0:2]
+        
+        # Determine which foes are no longer observed compared to previous time step
+        foes_gone = {}
+        for id in self.foe_ids:
+            if id not in new_foe_ids:
+                foes_gone[id] = self.foe_ids[id]
+                
+        # Update and return
+        self.foe_ids = new_foe_ids
+        return foes_gone
     
     def update_MC_points(self, id):
         new_points = []
@@ -1643,7 +1740,7 @@ class JointObservation(object):
         x = int(math.floor(pos[0]/16.0)*16.0)
         y = int(math.floor(pos[1]/16.0)*16.0)
         
-        return (x,y) #self.correct_tile_coords((x,y))
+        return (x,y)
 
     def correct_tile_coords(self, coords):
         
