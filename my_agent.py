@@ -9,12 +9,14 @@ import cPickle as pickle
 from domination.libs import astar
 astar = astar.astar
 
-DRAW_MESH_POINTS = True
-DRAW_MESH_POINT_COORDS = True
+DRAW_MESH_POINTS = False
+DRAW_MESH_POINT_COORDS = False
 DRAW_AGENT_DOT = True
 DRAW_AGENT_VIEW = True
 DRAW_AGENT_AMMO = True
 DRAW_AGENT_GOAL = True
+DRAW_PF_ALL = True
+DRAW_PF_PROMINENT = False
 
 class Agent(object):
 
@@ -685,6 +687,11 @@ class Agent(object):
                         label = font.render(str(point), True, (0,0,0))
                         label_pos = (point[0] - label.get_width()/2., point[1] + 5)
                         #surface.blit(label, label_pos)
+                        
+            if DRAW_PF_ALL:
+                for enemy_pf, color in zip(self.joint_observation.mc_points, [(169, 32, 62), (236, 242, 69), (255, 128, 0)]):
+                    for point in enemy_pf:
+                        pygame.draw.circle(surface, color, (int(point[0]), int(point[1])), 1)
         
         # Details of agents are drawn in their respective colors:
         #     Agent 0 = red
