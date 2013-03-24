@@ -33,7 +33,7 @@ class Agent(object):
         self.team = team
         self.settings = settings
         self.epsilon = 0.05
-        self.gamma = 0.9
+        self.gamma = 0.95
         learning_weighting = ((matchinfo.num_games - matchinfo.current + 1) / (matchinfo.num_games)) # decrease learning rate over time
         self.alpha = 0.2 * learning_weighting
         # WoLF
@@ -1145,7 +1145,7 @@ class JointObservation(object):
 
         # Current game score, and the difference with the score at the last
         # timestep, as a discretized derivative
-        self.score = (0, 0)
+        self.old_score = (50, 50)  # Initial game score
         self.diff_score = (0, 0)
 
         # Keep track of the agents who have passed their observation in this timestep
@@ -1230,9 +1230,11 @@ class JointObservation(object):
                     self.walls[wall].remove(agent_id)
                 except KeyError:
                     pass
+
         # the difference in score for both teams between the current and last time step
-        self.diff_score = (observation.score[0] - self.score[0],
-                           observation.score[1] - self.score[1])
+        self.diff_score = (observation.score[0] - self.old_score[0],
+                           observation.score[1] - self.old_score[1])
+
 
         # checks if all agents have been called
         self.called_agents.add(agent_id)
@@ -1249,6 +1251,7 @@ class JointObservation(object):
             self.old_state_key = self.new_state_key
             self.old_joint_action = self.new_joint_action
             self.old_available_joint_actions = self.available_joint_actions
+            self.old_score = (observation.score[0], observation.score[1])
 
         # find all paths for the current agent to every interest point
         self.paths[agent_id] = find_all_paths(observation.loc, observation.angle, self.interest_points, 
