@@ -94,8 +94,8 @@ class Agent(object):
             return a tuple in the form: (turn, speed, shoot)
         """ 
         # Compute the goal
-        self.set_goal_sarsa()
-        # self.set_goal_hardcoded()
+        # self.set_goal_sarsa()
+        self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -145,6 +145,26 @@ class Agent(object):
         am2 = False
         am1_timer = 0
         am2_timer = 0
+        
+        # placeholder variables
+        # positions on the field of interest points cp1=(13, 3) cp2=(15, 13) am1=(18, 6) am2=(10, 10)
+        cp1_sqr = self.joint_observation.get_tile_coords(cp1_loc)
+        cp2_sqr = self.joint_observation.get_tile_coords(cp2_loc)
+        am1_sqr = self.joint_observation.get_tile_coords(am1_loc)
+        am2_sqr = self.joint_observation.get_tile_coords(am2_loc)
+        pf_probs = self.joint_observation.mc_probs
+        # DEBUG 
+        #print str(pf_probs)
+        
+        cp1_prob = max( [ pf_probs[0][cp1_sqr], pf_probs[1][cp1_sqr], pf_probs[2][cp1_sqr] ] )
+        cp2_prob = max( [ pf_probs[0][cp2_sqr], pf_probs[1][cp2_sqr], pf_probs[2][cp2_sqr] ] )
+        am1_prob = max( [ pf_probs[0][am1_sqr], pf_probs[1][am1_sqr], pf_probs[2][am1_sqr] ] )
+        am2_prob = max( [ pf_probs[0][am2_sqr], pf_probs[1][am2_sqr], pf_probs[2][am2_sqr] ] )
+        
+        am_enemy_loc = am1_loc if self.team == TEAM_BLUE else am2_loc
+        am_enemy_dist = am1_dist if self.team == TEAM_BLUE else am2_dist
+        am_enemy = am1 if self.team == TEAM_BLUE else am2
+        
         
         for obj in self.joint_observation.objects:
             if obj[0:2] == am1_loc:
@@ -233,34 +253,76 @@ class Agent(object):
 
         #If no agent has ammo, follow this policy
         if len(have_ammo) == 0:
+            # If there is a much higher probability of an enemy present at one cp, 
+            # then only send one agent to the cp with very low probability
+            if cp1_prob > cp2_prob:
+                if not controlling_cps[1]:
+                    # Send agent closest to cp2 to cp2
+                    min_dist, min_id = 10000.0, 0
+                    for id in range(3):
+                        if (id not in assigned) and cp2_dist[id] < min_dist:
+                            min_dist = cp2_dist[id]
+                            min_id = id
+                    goals[min_id] = cp2_loc
+                    assigned.append(min_id)
+                
+                # Assign agent to enemy ammo am_enemy_loc
+                min_dist, min_id = 10000.0, 0
+                for id in range(3):
+                    if (id not in assigned) and am_enemy_dist[id] < min_dist:
+                        min_dist = am_enemy_dist[id]
+                        min_id = id
+                goals[min_id] = am_enemy_loc
+                assigned.append(min_id)
+                
+            elif cp1_prob < cp2_prob:
+                if not controlling_cps[0]:
+                    # Send agent closest to cp1 to cp1
+                    min_dist, min_id = 10000.0, 0
+                    for id in range(3):
+                        if cp1_dist[id] < min_dist:
+                            min_dist = cp1_dist[id]
+                            min_id = id
+                    goals[min_id] = cp1_loc
+                    assigned.append(min_id)
+                
+                # Assign agent to enemy ammo am_enemy_loc
+                min_dist, min_id = 10000.0, 0
+                for id in range(3):
+                    if (id not in assigned) and am_enemy_dist[id] < min_dist:
+                        min_dist = am_enemy_dist[id]
+                        min_id = id
+                goals[min_id] = am_enemy_loc
+                assigned.append(min_id)
+            # if enemy presence is low at both, then just go for both
+            else:
+                # Send agent closest to cp1 to cp1
+                min_dist, min_id = 10000.0, 0
+                for id in range(3):
+                    if cp1_dist[id] < min_dist:
+                        min_dist = cp1_dist[id]
+                        min_id = id
+                goals[min_id] = cp1_loc
+                assigned.append(min_id)
             
-            # Send agent closest to cp1 to cp1
-            min_dist, min_id = 10000.0, 0
-            for id in range(3):
-                if cp1_dist[id] < min_dist:
-                    min_dist = cp1_dist[id]
-                    min_id = id
-            goals[min_id] = cp1_loc
-            assigned.append(min_id)
-            
-            # Send agent closest to cp2 to cp2
-            min_dist, min_id = 10000.0, 0
-            for id in range(3):
-                if (id not in assigned) and cp2_dist[id] < min_dist:
-                    min_dist = cp2_dist[id]
-                    min_id = id
-            goals[min_id] = cp2_loc
-            assigned.append(min_id)
+                # Send agent closest to cp2 to cp2
+                min_dist, min_id = 10000.0, 0
+                for id in range(3):
+                    if (id not in assigned) and cp2_dist[id] < min_dist:
+                        min_dist = cp2_dist[id]
+                        min_id = id
+                goals[min_id] = cp2_loc
+                assigned.append(min_id)
 
-            # Send the other agent to collect ammo
+            # Send the other agent(s) to collect ammo
             for id in range(3):
                 if id not in assigned:
                     # Go to closest ammo
-                    if am1 and am2:
+                    if am1 and am2 and am1_loc not in goals and am2_loc not in goals:
                         goals[id] = am1_loc if (am1_dist[id] < am2_dist[id]) else am2_loc
-                    elif am1:
+                    elif am1 and am1_loc not in goals:
                         goals[id] = am1_loc
-                    elif am2:
+                    elif am2 and am2_loc not in goals:
                         goals[id] = am2_loc
                     else:
                         am1_delay = max(am1_dist[id], am1_timer)
@@ -270,15 +332,21 @@ class Agent(object):
                             goals[id] = am1_loc
                         else:
                             goals[id] = am2_loc
-                assigned.append(id)
+                    assigned.append(id)
 
         # If one agent has ammo, follow this policy
         elif len(have_ammo) == 1:
             # Send the agent with ammo to nearest uncontrolled cp, and one to the other cp, and one for ammo
 
-            # Assign the agent with ammo to the nearest cp
+            # Assign the agent with ammo to the nearest cp with highest enemy probability
             ammo_id = have_ammo[0]
-            goals[ammo_id] = cp1_loc if (cp1_dist[ammo_id] < cp2_dist[ammo_id]) else cp2_loc
+            if cp1_prob > cp2_prob:
+                goals[ammo_id] = cp1_loc
+            elif cp1_prob < cp2_prob:
+                goals[ammo_id] = cp2_loc
+            # if the probabilities are the same then pick the closest one
+            else:
+                goals[ammo_id] = cp1_loc if (cp1_dist[ammo_id] < cp2_dist[ammo_id]) else cp2_loc
             assigned.append(ammo_id)
             
             # Send agent closest to other cp to other cp
@@ -295,15 +363,15 @@ class Agent(object):
             goals[min_id] = other_cp_loc
             assigned.append(min_id)
             
-            # Send other agent to collect ammo
+            # Send the other agent(s) to collect ammo
             for id in range(3):
                 if id not in assigned:
                     # Go to closest ammo
-                    if am1 and am2:
+                    if am1 and am2 and am1_loc not in goals and am2_loc not in goals:
                         goals[id] = am1_loc if (am1_dist[id] < am2_dist[id]) else am2_loc
-                    elif am1:
+                    elif am1 and am1_loc not in goals:
                         goals[id] = am1_loc
-                    elif am2:
+                    elif am2 and am2_loc not in goals:
                         goals[id] = am2_loc
                     else:
                         am1_delay = max(am1_dist[id], am1_timer)
@@ -313,7 +381,7 @@ class Agent(object):
                             goals[id] = am1_loc
                         else:
                             goals[id] = am2_loc
-                assigned.append(id)
+                    assigned.append(id)
         
         # If two agents have ammo, follow this policy
         elif len(have_ammo) == 2:
@@ -323,30 +391,21 @@ class Agent(object):
             ammo_id = have_ammo[0]
             goals[ammo_id] = cp1_loc if (cp1_dist[ammo_id] < cp2_dist[ammo_id]) else cp2_loc
             assigned.append(ammo_id)
-            
-            # Send agent with ammo closest to cp1 to cp1
-            min_dist, min_id = 10000.0, 0
-            for id in have_ammo:
-                if cp1_dist[id] < min_dist:
-                    min_dist = cp1_dist[id]
-                    min_id = id
-            goals[min_id] = cp1_loc
-            assigned.append(min_id)
         
             # Send other agent with ammo to other cp
             for id in have_ammo:
                 if id not in assigned:
                     goals[id] = cp2_loc if (cp1_loc in goals) else cp1_loc
             
-            # Send other agent to get ammo
+            # Send the other agent(s) to collect ammo
             for id in range(3):
                 if id not in assigned:
                     # Go to closest ammo
-                    if am1 and am2:
+                    if am1 and am2 and am1_loc not in goals and am2_loc not in goals:
                         goals[id] = am1_loc if (am1_dist[id] < am2_dist[id]) else am2_loc
-                    elif am1:
+                    elif am1 and am1_loc not in goals:
                         goals[id] = am1_loc
-                    elif am2:
+                    elif am2 and am2_loc not in goals:
                         goals[id] = am2_loc
                     else:
                         am1_delay = max(am1_dist[id], am1_timer)
@@ -356,7 +415,7 @@ class Agent(object):
                             goals[id] = am1_loc
                         else:
                             goals[id] = am2_loc
-                assigned.append(id)
+                    assigned.append(id)
             
         # If three agents have ammo, and at least one cp is uncontrolled, follow this policy
         elif len(have_ammo) == 3:
@@ -400,12 +459,141 @@ class Agent(object):
         # Instantiate goal for agent 0
         self.goal = goals[0]
     
+    def find_path_recursively(self, start, angle, ends, mesh, grid, waypoints=[], return_type="dict"):
+        """ Uses astar to find a path from start to each point in end, with optional waypoints in between
+            using the given mesh and tile grid.
+        """ 
+        if return_type == "dict":
+            path_return = {}
+        else:
+            path_return = []
+        for end in ends:
+            end_point = ()
+            if type(ends) is dict:
+                end_point = ends[end]
+            else:
+                end_point = end
+            print "endpoint: "+str(end_point)
+            path = [start]
+            for pt in waypoints:
+                print "waypoint: " + str(pt)
+                path.extend( find_single_path(path[-1], angle, pt, mesh, grid,
+                    self.settings.max_speed, self.settings.max_turn, self.settings.tilesize) )
+                print "path extended with waypoint: " + str(path)
+            print "last element in path: " + str(path[-1])
+            path.extend( find_single_path(path[-1], angle, end_point, mesh, grid, 
+                self.settings.max_speed, self.settings.max_turn, self.settings.tilesize) )
+            del path[0]
+            if return_type == "dict":
+                path_return[end_point] = path
+            else:
+                path_return.append(path)
+            print "path: " + str(path)
+        return path_return
+
+
+    def find_detour(self, goal):
+        """ This function is used to calculate the paths to a goal
+            for a certain agent while including waypoints to enemies in it's path
+        """
+        # get all known enemy positions and the estimation from the Particle Filter
+        enemy_pos = self.get_enemy_pos( (0, 0), (460, 260) )
+        enemy_locs = []
+        for enemy in enemy_pos:
+            if enemy != []:
+                enemy_locs.append(enemy[0][1])
+        
+        # calculate each path to the enemies        
+        enemy_paths = find_all_paths(self.obs.loc, self.obs.angle, enemy_locs, self.mesh, self.grid)
+        enemy_dist = []
+        for path in enemy_paths.values():
+            enemy_dist.append(path[1])
+        
+        path_goal = find_all_paths(self.obs.loc, self.obs.angle, [goal], self.mesh, self.grid)
+        path = path_goal[goal]
+        # select the shortest path to an enemy
+        min_dist, closest_enemy = path_goal[goal][1], goal
+        for i in range(len(enemy_dist)):
+            if enemy_dist[i] < min_dist:
+                min_dist = enemy_dist[i]
+                closest_enemy = enemy_locs[i]
+                path = enemy_paths[closest_enemy]
+        
+        # takes the shortest path to either an enemy or a goal
+        return path
+        
+        
+    def get_enemy_pos(self, topleft, bottomright):
+        """ This function uses the observation to pinpoint enemy positions 
+            if it cannot then it will use the particle filter information to
+            estimate the positions
+        """
+        
+        
+        enemy_positions = []
+        """
+        #check observations for enemies within the region
+        print str(self.joint_observation.foes[self.joint_observation.step]) + " foes at current timestep"
+        for foe in self.joint_observation.foes[self.joint_observation.step]:
+            pos = self.joint_observation.get_tile_coords((foe[0], foe[1])) 
+            if pos >= topleft and pos <= bottomright:
+                enemy_positions.append([(1, pos)])
+        
+        # exclude lists that has the highest probability of the observed enemies
+        exclude = []
+        for enemy in enemy_positions:
+            highest_prob = -1
+            list_nr = -1
+            for i in range(len(self.joint_observation.mc_probs)):
+                if not( i in exclude ) and enemy[0][1] in self.joint_observation.mc_probs[i]:
+                    if self.joint_observation.mc_probs[i][enemy[0][1]] > highest_prob:
+                        highest_prob = self.joint_observation.mc_probs[i][enemy[0][1]]
+                        list_nr = i
+            exclude.append(list_nr)
+        """
+        
+        # of the remaining lists
+        # make a list of the probabilities within the region topleft to bottomright
+        prob_list = []
+        for i in range(len(self.joint_observation.mc_probs)):
+            #if not( i in exclude ):
+                prob_list.append([])
+                for x in range(int(math.floor(topleft[0]/16.0)), int(math.floor(bottomright[0]/16.0))+1):
+                    for y in range(int(math.floor(topleft[1]/16.0)), int(math.floor(bottomright[1]/16.0))+1):
+                        x_coord = x * 16
+                        y_coord = y * 16
+                        if (x_coord, y_coord) in self.joint_observation.mc_probs[i]:
+                            prob_list[-1].append( (self.joint_observation.mc_probs[i][(x_coord, y_coord)], (x_coord, y_coord)) )
+        
+        threshold = 0
+        # sort the remaining lists
+        sorted_prob_list = []
+        
+        for i in range(len(prob_list)):
+            temp_list = sorted(prob_list[i], reverse=True)
+            # pick items with a probability above the threshold
+            item_list = []
+            for item in temp_list:
+                if item[0] > threshold:
+                    item_list.append(item)
+            sorted_prob_list.append(item_list)
+        # DEBUG 
+        # print str(sorted_prob_list)
+        # results are the observed enemy positions and the picked PF positions
+        enemy_positions.extend(sorted_prob_list)
+        
+        return enemy_positions
+    
+    
     def get_action(self):
         """This function returns the action tuple for the agent.
         """
         path = []
         for ip in Agent.INTEREST_POINTS:
             if self.goal == Agent.INTEREST_POINTS[ip]:
+                if self.obs.ammo:
+                    # set path to enemy or goal whichever is closer
+                    self.joint_observation.paths[self.id][ip] = self.find_detour(self.goal)
                 path = self.joint_observation.paths[self.id][ip][0]
         
         if not path:
@@ -909,7 +1097,11 @@ def find_all_paths(start, angle, ends, mesh, grid, max_speed=40, max_angle=math.
     
     path_dict = {}
     for end_point in ends:
-        end = ends[end_point]
+        
+        if type(ends) is dict:
+            end = ends[end_point]
+        else:
+            end = end_point
         
         # If there is a straight line, just return the end point
         if not line_intersects_grid(start, end, grid, tilesize):
