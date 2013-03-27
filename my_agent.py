@@ -1280,6 +1280,7 @@ class JointObservation(object):
         
         # Game constants
         self.interest_points = interest_pts
+        self.settings = settings
         self.team = team        
         self.grid = grid
         self.mesh = transform_mesh(nav_mesh, interest_pts, grid, settings.tilesize, settings.max_speed, settings.max_turn)
@@ -1778,19 +1779,20 @@ class JointObservation(object):
         foes_gone = self.update_foe_ids()
         
         # Update MC points
-        for id in range(self.number_of_agents):
-            # If foe is observed, store a single MC point
-            if id in self.foe_ids:
-                self.mc_points[id] = [self.foe_ids[id]]
-            # If foe is just gone, initialise MC points at previous location
-            elif id in foes_gone:
-                if self.check_vision(foes_gone[id]):
-                    self.mc_points[id] = self.init_MC_points_single(self.enemy_spawn_pos[id])
+        if self.step > 1:
+            for id in range(self.number_of_agents):
+                # If foe is observed, store a single MC point
+                if id in self.foe_ids:
+                    self.mc_points[id] = [self.foe_ids[id]]
+                # If foe is just gone, initialise MC points at previous location
+                elif id in foes_gone:
+                    if self.check_vision(foes_gone[id]):
+                        self.mc_points[id] = self.init_MC_points_single(self.enemy_spawn_pos[id])
+                    else:
+                        self.mc_points[id] = self.init_MC_points_single(foes_gone[id])
+                # If foe is still not observed, spread around the MC points
                 else:
-                    self.mc_points[id] = self.init_MC_points_single(foes_gone[id])
-            # If foe is still not observed, spread around the MC points
-            else:
-                self.mc_points[id] = self.update_MC_points(id)
+                    self.mc_points[id] = self.update_MC_points(id)
         
         # Update tile probabilities
         for id in range(self.number_of_agents):
@@ -1885,21 +1887,47 @@ class JointObservation(object):
     def update_MC_points(self, id):
         new_points = []
         for point in self.mc_points[id]:
-            # Calculate the new position of the point
-            x_offset = random.uniform(-self.settings.max_speed, self.settings.max_speed)
-            y_offset = random.uniform(-self.settings.max_speed, self.settings.max_speed)
-            new_x= point[0] + x_offset
-            new_y = point[1] + y_offset
-            new_point = (new_x, new_y)
             
+            # If the point is at an interest point, there is a 50% chance it will not move
+            at_ip = False
+            for ip in self.interest_points:
+                if point_dist(point, self.interest_points[ip]) < self.settings.tilesize:
+                    at_ip = True
+            
+            if at_ip and random.uniform(0,1) < 0.5:
+                new_point = point
+            
+            # Else look which mesh points are reachable from the current point and move towards one randomly
+            else:
+                reachable_mesh_pts = []
+                for n in self.mesh:
+                    if not line_intersects_grid(point,n,self.grid,self.settings.tilesize):
+                        reachable_mesh_pts.append(n)
+                
+                if len(reachable_mesh_pts) == 0:
+                    new_point = point
+                else:
+                    target = reachable_mesh_pts[random.randrange(len(reachable_mesh_pts))]
+                    dx = target[0] - point[0]
+                    dy = target[1] - point[1]
+                    x_offset = min(self.settings.max_speed, dx) if dx > 0 else max(-self.settings.max_speed, dx)
+                    y_offset = min(self.settings.max_speed, dy) if dy > 0 else max(-self.settings.max_speed, dy)
+
+                    new_x= point[0] + x_offset
+                    new_y = point[1] + y_offset
+                    new_point = (new_x, new_y)
+                
             # Check if point is in current line of sight
             in_vision = self.check_vision(new_point)
             
             # Check if point is on the map
-            in_bounds = self.check_bounds(new_point)
+            #in_bounds = self.check_bounds(new_point)
+            
+            # Check if point is reachable from old point
+            reachable = not line_intersects_grid(point, new_point, self.grid, 16)
             
             # Add new point to the list
-            if not in_vision and in_bounds:
+            if not in_vision and reachable: # and in_bounds and reachable:
                 new_points.append(new_point)
         return new_points
 
