@@ -64,7 +64,7 @@ class Tournament1(scenarios.Scenario):
                               think_time=1.0,)
 
 class Tournament2(scenarios.Scenario):
-    REPEATS   = 5
+    REPEATS   = 25
     GENERATOR = None
     FIELD     = core.Field.from_string(FIELD2)
     SETTINGS  = core.Settings(max_steps=300,
