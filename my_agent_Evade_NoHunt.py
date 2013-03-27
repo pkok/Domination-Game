@@ -265,16 +265,6 @@ class Agent(object):
                             min_id = id
                     goals[min_id] = cp2_loc
                     assigned.append(min_id)
-                
-                # Assign agent to enemy ammo am_enemy_loc
-                min_dist, min_id = 10000.0, 0
-                for id in range(3):
-                    if (id not in assigned) and am_enemy_dist[id] < min_dist:
-                        min_dist = am_enemy_dist[id]
-                        min_id = id
-                goals[min_id] = am_enemy_loc
-                assigned.append(min_id)
-                
             elif cp1_prob*2< cp2_prob:
                 if not controlling_cps[0]:
                     # Send agent closest to cp1 to cp1
@@ -285,15 +275,6 @@ class Agent(object):
                             min_id = id
                     goals[min_id] = cp1_loc
                     assigned.append(min_id)
-                
-                # Assign agent to enemy ammo am_enemy_loc
-                min_dist, min_id = 10000.0, 0
-                for id in range(3):
-                    if (id not in assigned) and am_enemy_dist[id] < min_dist:
-                        min_dist = am_enemy_dist[id]
-                        min_id = id
-                goals[min_id] = am_enemy_loc
-                assigned.append(min_id)
             # if enemy presence is low at both, then just go for both
             else:
                 # Send agent closest to cp1 to cp1
@@ -591,9 +572,9 @@ class Agent(object):
         path = []
         for ip in Agent.INTEREST_POINTS:
             if self.goal == Agent.INTEREST_POINTS[ip]:
-                if self.obs.ammo:
+                #if self.obs.ammo:
                     # set path to enemy or goal whichever is closer
-                    self.joint_observation.paths[self.id][ip] = self.find_detour(self.goal)
+                    #self.joint_observation.paths[self.id][ip] = self.find_detour(self.goal)
                 path = self.joint_observation.paths[self.id][ip][0]
         
         if not path:

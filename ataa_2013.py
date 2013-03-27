@@ -89,7 +89,7 @@ if __name__ == '__main__':
     now = datetime.datetime.now()
     parser = argparse.ArgumentParser(description='Process test flag.')
     parser.add_argument('-red', '--red_agent', type=str, default='my_agent.py')
-    parser.add_argument('-blue', '--blue_agent', type=str, default='domination/agent.py')
+    parser.add_argument('-blue', '--blue_agent', type=str, default='my_agent_experiment.py')
     parser.add_argument('-s', '--save_blob', type=str, default = '')
     parser.add_argument('-n', '--new_blob', action='store_true')
     parser.add_argument('-t', '--test', action='store_true')

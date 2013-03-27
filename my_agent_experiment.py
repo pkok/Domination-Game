@@ -79,8 +79,8 @@ class Agent(object):
             return a tuple in the form: (turn, speed, shoot)
         """ 
         # Compute the goal
-        self.set_goal_sarsa()
-        # self.set_goal_hardcoded()
+        # self.set_goal_sarsa()
+        self.set_goal_hardcoded()
         
         # Compute and return the corresponding action
         action = self.get_action()
@@ -1112,7 +1112,7 @@ class JointObservation(object):
         if (not self.old_joint_action == -1):
             objective = self.coords[self.old_joint_action[agent_id]]
             if (point_dist(objective, observation.loc) < self.settings.tilesize) or observation.respawn_in > 0:
-                print "Agent " + str(agent_id) + " unlocked."
+                #print "Agent " + str(agent_id) + " unlocked."
                 self.locked_agent[agent_id] = False
         
         # Fill friends with current agent data
@@ -1494,9 +1494,9 @@ class JointObservation(object):
         """
         #for tile in self.mc_probs[0]:
         #    print (tile, self.mc_probs[0][tile])
-        for id in range(len(self.mc_points)):
-           print len(self.mc_points[id])
-        print '\r\n'
+        #for id in range(len(self.mc_points)):
+        #   print len(self.mc_points[id])
+        #print '\r\n'
         
         # Update MC points
         if not self.step == 1:

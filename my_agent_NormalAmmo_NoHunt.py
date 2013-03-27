@@ -255,6 +255,7 @@ class Agent(object):
         if len(have_ammo) == 0:
             # If there is a much higher probability of an enemy present at one cp, 
             # then only send one agent to the cp with very low probability
+            """
             if cp1_prob > cp2_prob *2:
                 if not controlling_cps[1]:
                     # Send agent closest to cp2 to cp2
@@ -296,23 +297,24 @@ class Agent(object):
                 assigned.append(min_id)
             # if enemy presence is low at both, then just go for both
             else:
-                # Send agent closest to cp1 to cp1
-                min_dist, min_id = 10000.0, 0
-                for id in range(3):
-                    if cp1_dist[id] < min_dist:
-                        min_dist = cp1_dist[id]
-                        min_id = id
-                goals[min_id] = cp1_loc
-                assigned.append(min_id)
-            
-                # Send agent closest to cp2 to cp2
-                min_dist, min_id = 10000.0, 0
-                for id in range(3):
-                    if (id not in assigned) and cp2_dist[id] < min_dist:
-                        min_dist = cp2_dist[id]
-                        min_id = id
-                goals[min_id] = cp2_loc
-                assigned.append(min_id)
+            """
+            # Send agent closest to cp1 to cp1
+            min_dist, min_id = 10000.0, 0
+            for id in range(3):
+                if cp1_dist[id] < min_dist:
+                    min_dist = cp1_dist[id]
+                    min_id = id
+            goals[min_id] = cp1_loc
+            assigned.append(min_id)
+        
+            # Send agent closest to cp2 to cp2
+            min_dist, min_id = 10000.0, 0
+            for id in range(3):
+                if (id not in assigned) and cp2_dist[id] < min_dist:
+                    min_dist = cp2_dist[id]
+                    min_id = id
+            goals[min_id] = cp2_loc
+            assigned.append(min_id)
 
             # Send the other agent(s) to collect ammo
             for id in range(3):

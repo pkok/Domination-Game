@@ -591,9 +591,9 @@ class Agent(object):
         path = []
         for ip in Agent.INTEREST_POINTS:
             if self.goal == Agent.INTEREST_POINTS[ip]:
-                if self.obs.ammo:
+                #if self.obs.ammo:
                     # set path to enemy or goal whichever is closer
-                    self.joint_observation.paths[self.id][ip] = self.find_detour(self.goal)
+                    #self.joint_observation.paths[self.id][ip] = self.find_detour(self.goal)
                 path = self.joint_observation.paths[self.id][ip][0]
         
         if not path:
