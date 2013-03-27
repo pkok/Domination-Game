@@ -61,7 +61,7 @@ class Tournament1(scenarios.Scenario):
                               max_range=60,
                               max_see=80,
                               max_turn=math.pi/4,
-                              think_time=0.06,)
+                              think_time=1.0,)
 
 class Tournament2(scenarios.Scenario):
     REPEATS   = 5
@@ -75,7 +75,7 @@ class Tournament2(scenarios.Scenario):
                               max_range=60,
                               max_see=80,
                               max_turn=math.pi/4,
-                              think_time=0.06,
+                              think_time=1.0,
                               capture_mode=core.CAPTURE_MODE_MAJORITY)
 
 
