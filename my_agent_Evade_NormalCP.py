@@ -318,16 +318,17 @@ class Agent(object):
         # If one agent has ammo, follow this policy
         elif len(have_ammo) == 1:
             # Send the agent with ammo to nearest uncontrolled cp, and one to the other cp, and one for ammo
-			"""
+			
             # Assign the agent with ammo to the nearest cp with highest enemy probability
             ammo_id = have_ammo[0]
+            """
             if cp1_prob > cp2_prob*2:
                 goals[ammo_id] = cp1_loc
             elif cp1_prob*2 < cp2_prob:
                 goals[ammo_id] = cp2_loc
             # if the probabilities are the same then pick the closest one
             else:
-			"""
+            """
             goals[ammo_id] = cp1_loc if (cp1_dist[ammo_id] < cp2_dist[ammo_id]) else cp2_loc
             assigned.append(ammo_id)
             
