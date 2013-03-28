@@ -1,0 +1,528 @@
+blue = [  ];
+red = [  ];
+steps = [  ];
+time_b = [ ];
+time_r = [  ];
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 248 ];
+time_b = [ time_b 2.4300000000000397 ];
+time_r = [ time_r 45.82999999999996 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 171 ];
+time_b = [ time_b 1.7600000000000406 ];
+time_r = [ time_r 39.24999999999999 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 171 ];
+time_b = [ time_b 1.730000000000004 ];
+time_r = [ time_r 40.33999999999996 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 102 ];
+time_b = [ time_b 1.1900000000002535 ];
+time_r = [ time_r 20.249999999999744 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 105 ];
+time_b = [ time_b 1.1600000000001103 ];
+time_r = [ time_r 17.099999999999852 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 240 ];
+time_b = [ time_b 2.3700000000001467 ];
+time_r = [ time_r 47.10999999999993 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 203 ];
+time_b = [ time_b 2.1100000000001558 ];
+time_r = [ time_r 37.08999999999972 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 231 ];
+time_b = [ time_b 2.279999999999859 ];
+time_r = [ time_r 48.389999999999816 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 102 ];
+time_b = [ time_b 1.1100000000000136 ];
+time_r = [ time_r 20.529999999999973 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 294 ];
+time_b = [ time_b 2.9399999999993156 ];
+time_r = [ time_r 51.000000000000796 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 102 ];
+time_b = [ time_b 1.1399999999998158 ];
+time_r = [ time_r 20.33000000000027 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 126 ];
+time_b = [ time_b 1.440000000000225 ];
+time_r = [ time_r 19.039999999999623 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 231 ];
+time_b = [ time_b 2.3500000000000227 ];
+time_r = [ time_r 46.7999999999999 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 184 ];
+time_b = [ time_b 1.8999999999999773 ];
+time_r = [ time_r 36.619999999999834 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 96 ];
+time_b = [ time_b 0.9699999999999136 ];
+time_r = [ time_r 17.13000000000011 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 202 ];
+time_b = [ time_b 2.060000000000173 ];
+time_r = [ time_r 31.69999999999959 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 103 ];
+time_b = [ time_b 1.1100000000001273 ];
+time_r = [ time_r 17.849999999999795 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 102 ];
+time_b = [ time_b 1.1500000000005457 ];
+time_r = [ time_r 20.439999999999372 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 153 ];
+time_b = [ time_b 1.5500000000004093 ];
+time_r = [ time_r 36.15999999999974 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 123 ];
+time_b = [ time_b 1.3500000000001364 ];
+time_r = [ time_r 17.260000000000105 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 195 ];
+time_b = [ time_b 2.009999999998854 ];
+time_r = [ time_r 43.77000000000123 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 102 ];
+time_b = [ time_b 1.2000000000005002 ];
+time_r = [ time_r 20.309999999999604 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 102 ];
+time_b = [ time_b 1.1700000000003001 ];
+time_r = [ time_r 20.35999999999956 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 202 ];
+time_b = [ time_b 2.060000000000514 ];
+time_r = [ time_r 31.52999999999986 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 102 ];
+time_b = [ time_b 1.1899999999999409 ];
+time_r = [ time_r 20.370000000000232 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.760000000000105 ];
+time_r = [ time_r 1.9499999999995907 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.23000000000047 ];
+time_r = [ time_r 1.9199999999995043 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 241 ];
+time_b = [ time_b 46.1400000000001 ];
+time_r = [ time_r 2.5899999999998045 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.389999999999304 ];
+time_r = [ time_r 2.0000000000004547 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.45000000000027 ];
+time_r = [ time_r 1.9499999999997044 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 231 ];
+time_b = [ time_b 51.129999999999654 ];
+time_r = [ time_r 2.480000000000473 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.46000000000049 ];
+time_r = [ time_r 1.8899999999998727 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 104 ];
+time_b = [ time_b 22.299999999999727 ];
+time_r = [ time_r 1.2200000000000273 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 136 ];
+time_b = [ time_b 28.330000000000382 ];
+time_r = [ time_r 1.5899999999999181 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 120 ];
+time_b = [ time_b 20.190000000000055 ];
+time_r = [ time_r 1.5299999999997453 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.58999999999946 ];
+time_r = [ time_r 2.0000000000004547 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 101 ];
+time_b = [ time_b 18.9099999999994 ];
+time_r = [ time_r 1.2400000000004638 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.45999999999958 ];
+time_r = [ time_r 2.020000000000664 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.77000000000044 ];
+time_r = [ time_r 1.9599999999995816 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 101 ];
+time_b = [ time_b 19.0300000000002 ];
+time_r = [ time_r 1.1900000000000546 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.259999999998854 ];
+time_r = [ time_r 1.9700000000007094 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 231 ];
+time_b = [ time_b 51.53999999999951 ];
+time_r = [ time_r 2.5100000000002183 ];
+
+
+
+
+
+
+blue = [ blue 0 ];
+red = [ red 100 ];
+steps = [ steps 118 ];
+time_b = [ time_b 22.669999999999845 ];
+time_r = [ time_r 1.3700000000001182 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 233 ];
+time_b = [ time_b 54.120000000000346 ];
+time_r = [ time_r 2.599999999999909 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.19999999999959 ];
+time_r = [ time_r 1.949999999999818 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 178 ];
+time_b = [ time_b 40.32000000000107 ];
+time_r = [ time_r 1.989999999999327 ];
+
+
+
+
+
+
+blue = [ blue 100 ];
+red = [ red 0 ];
+steps = [ steps 231 ];
+time_b = [ time_b 51.15999999999963 ];
+time_r = [ time_r 2.5400000000006457 ];
+
+red(time_r < time_b) = blue(time_r < time_b)
+time_r(time_r < time_b) = time_b(time_r < time_b)
+
+Ev_nH_score = red
+Ev_nH_time = time_r
+Ev_nH_steps = steps
